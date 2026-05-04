@@ -42,6 +42,24 @@ def _normalize_agent_id_for_storage(hass, agent_id: str) -> str:
     return candidate
 
 
+def _resolve_agent_id_for_selector(hass, agent_id: str) -> str:
+    candidate = agent_id.strip()
+    if not candidate or candidate == "conversation.home_assistant":
+        return candidate
+
+    if candidate.startswith("conversation."):
+        return candidate
+
+    entity_registry = er.async_get(hass)
+    for entry in entity_registry.entities.values():
+        if entry.domain != "conversation":
+            continue
+        if entry.config_entry_id == candidate:
+            return entry.entity_id
+
+    return candidate
+
+
 def _agent_selector(hass) -> selector.ConversationAgentSelector:
     return selector.ConversationAgentSelector({"language": hass.config.language})
 
@@ -56,6 +74,7 @@ class ConfigFlow(HAConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         preferred_agent = await _get_preferred_agent_id(self.hass)
+        default_agent = _resolve_agent_id_for_selector(self.hass, preferred_agent)
         if user_input is not None:
             agent_id = str(user_input.get(CONF_AGENT_ID, "")).strip()
             if not agent_id:
@@ -70,7 +89,7 @@ class ConfigFlow(HAConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema(
-                {vol.Required(CONF_AGENT_ID, default=preferred_agent): _agent_selector(self.hass)}
+                {vol.Required(CONF_AGENT_ID, default=default_agent): _agent_selector(self.hass)}
             ),
             errors=errors,
         )
@@ -100,6 +119,7 @@ class OptionsFlowHandler(OptionsFlow):
                 self._config_entry.data.get(CONF_AGENT_ID, preferred_agent),
             )
         ).strip()
+        current = _resolve_agent_id_for_selector(self.hass, current)
 
         if user_input is not None:
             agent_id = str(user_input.get(CONF_AGENT_ID, "")).strip()
