@@ -202,7 +202,7 @@ class XiaoYiClient:
                     break
         except asyncio.CancelledError:
             raise
-        except Exception as err:  # noqa: BLE001
+        except Exception as err:
             _LOGGER.warning("XiaoYi websocket loop error (%s): %s", server_id, err)
         finally:
             await self._handle_disconnect(server_id)
@@ -244,7 +244,7 @@ class XiaoYiClient:
             return
         try:
             await self._connect_to_server(server_id)
-        except Exception as err:  # noqa: BLE001
+        except Exception as err:
             _LOGGER.warning("XiaoYi reconnect failed (%s): %s", server_id, err)
             self._schedule_reconnect(server_id)
 
@@ -272,7 +272,7 @@ class XiaoYiClient:
                     if ws is not None and not ws.closed:
                         try:
                             await ws.send_json(payload)
-                        except Exception as err:  # noqa: BLE001
+                        except Exception as err:
                             _LOGGER.debug("XiaoYi heartbeat send failed (%s): %s", server_id, err)
         except asyncio.CancelledError:
             raise
@@ -360,7 +360,7 @@ class XiaoYiClient:
         except asyncio.CancelledError:
             await self._send_cancelled(task_id, session_id)
             raise
-        except Exception as err:  # noqa: BLE001
+        except Exception as err:
             _LOGGER.exception("XiaoYi prompt handling failed: %s", err)
             await self._send_error(task_id, session_id, err)
             return ""

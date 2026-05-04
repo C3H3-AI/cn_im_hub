@@ -13,6 +13,7 @@ from pathlib import Path
 import re
 import tempfile
 from typing import Any
+import uuid
 
 import aiohttp
 from homeassistant.core import HomeAssistant, callback
@@ -20,10 +21,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import Store
 import voluptuous as vol
 
-try:
-    from custom_components.claw_assistant.runtime.events import EVENT_LIVE_PROGRESS
-except ModuleNotFoundError:
-    EVENT_LIVE_PROGRESS = "claw_assistant_live_progress"
+EVENT_LIVE_PROGRESS = "ha_crack_live_progress"
 
 from ..command import execute_command, parse_command
 from ..camera_media import (
@@ -235,7 +233,7 @@ def _parse_face_tags(text: str) -> str:
     def _replace(match: re.Match[str]) -> str:
         try:
             payload = json.loads(base64.b64decode(match.group(1)).decode("utf-8"))
-        except Exception:  # noqa: BLE001
+        except Exception:
             return match.group(0)
         face_name = str(payload.get("text") or "").strip()
         return f"【表情: {face_name or '未知表情'}】"
@@ -289,7 +287,7 @@ def _extract_file_text(raw: bytes, file_name: str) -> str:
     if ext in _TEXT_FILE_EXTENSIONS or not ext:
         try:
             return raw.decode("utf-8", errors="replace")
-        except Exception:  # noqa: BLE001
+        except Exception:
             return ""
     if ext == ".docx":
         try:
@@ -305,7 +303,7 @@ def _extract_file_text(raw: bytes, file_name: str) -> str:
                 "".join(node.text or "" for node in paragraph.iter(f"{{{ns['w']}}}t"))
                 for paragraph in tree.iter(f"{{{ns['w']}}}p")
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
             return ""
     return ""
 
@@ -315,7 +313,7 @@ def _qq_provider_version() -> str:
         manifest_path = Path(__file__).resolve().parents[1] / "manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         return str(manifest.get("version") or "unknown")
-    except Exception:  # noqa: BLE001
+    except Exception:
         return "unknown"
 
 
@@ -521,7 +519,7 @@ class QQClient:
                     await self._handle_payload(json.loads(msg.data))
             except asyncio.CancelledError:
                 raise
-            except Exception as err:  # noqa: BLE001
+            except Exception as err:
                 _LOGGER.warning("QQ loop error: %s", err)
                 self._status = "error"
             finally:
@@ -656,7 +654,7 @@ class QQClient:
                             "当前 QQ 频道暂不支持语音回复。",
                             reply_to_message_id=inbound.message_id or None,
                         )
-                    except Exception as err:  # noqa: BLE001
+                    except Exception as err:
                         _LOGGER.warning("QQ TTS generation failed: %s", err)
                         await self._send_text_message(
                             inbound.target,
@@ -678,7 +676,7 @@ class QQClient:
                             reply_to_message_id=inbound.message_id or None,
                             file_name=file_name,
                         )
-                    except Exception as err:  # noqa: BLE001
+                    except Exception as err:
                         _LOGGER.warning("QQ file send failed: %s", err)
                         await self._send_text_message(
                             inbound.target,
@@ -712,7 +710,7 @@ class QQClient:
                             reply_to_message_id=inbound.message_id or None,
                             file_name=file_name,
                         )
-                    except Exception as err:  # noqa: BLE001
+                    except Exception as err:
                         _LOGGER.warning("QQ video send failed: %s", err)
                         await self._send_text_message(
                             inbound.target,
@@ -740,14 +738,14 @@ class QQClient:
                             reply_to_message_id=inbound.message_id or None,
                             file_name="animated.gif",
                         )
-                    except Exception as err:  # noqa: BLE001
+                    except Exception as err:
                         _LOGGER.warning("QQ gif send failed: %s", err)
                         await self._send_text_message(
                             inbound.target,
                             f"GIF source unavailable: {segment.source}",
                             reply_to_message_id=inbound.message_id or None,
                         )
-        except Exception as err:  # noqa: BLE001
+        except Exception as err:
             _LOGGER.exception("QQ command execution failed: %s", err)
             await self._send_text_message(
                 inbound.target,
@@ -991,22 +989,22 @@ class QQClient:
         if url.startswith("//"):
             url = f"https:{url}"
 
-        tmp = tempfile.NamedTemporaryFile(
-            suffix=_guess_suffix(file_name, content_type),
-            delete=False,
-        )
-        tmp_path = tmp.name
-        tmp.close()
+        tmp_dir = Path(self._hass.config.path(".storage", "cn_im_hub", "tmp"))
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        suffix = _guess_suffix(file_name, content_type)
+        tmp_path = str(tmp_dir / f"qq_{uuid.uuid4().hex[:12]}{suffix}")
 
         try:
+            chunks: list[bytes] = []
             async with self._session.get(url, timeout=aiohttp.ClientTimeout(total=120)) as resp:
                 if resp.status >= 400:
                     raise RuntimeError(f"download failed: {resp.status}")
-                with open(tmp_path, "wb") as handle:
-                    async for chunk in resp.content.iter_chunked(64 * 1024):
-                        handle.write(chunk)
+                async for chunk in resp.content.iter_chunked(64 * 1024):
+                    chunks.append(chunk)
+            data = b"".join(chunks)
+            await self._hass.async_add_executor_job(Path(tmp_path).write_bytes, data)
             return tmp_path
-        except Exception as err:  # noqa: BLE001
+        except Exception as err:
             _LOGGER.warning("QQ attachment download failed (%s): %s", url, err)
             with contextlib.suppress(OSError):
                 Path(tmp_path).unlink()
@@ -1019,7 +1017,7 @@ class QQClient:
 
         try:
             return await self._hass.async_add_executor_job(_read_preview)
-        except Exception:  # noqa: BLE001
+        except Exception:
             return ""
 
     async def _resolve_quote_text(self, data: dict[str, Any], ref_msg_idx: str) -> str:
@@ -1512,7 +1510,7 @@ class QQClient:
             local_path = resolve_ha_local_path(self._hass, source)
             if local_path is not None:
                 return await self._hass.async_add_executor_job(local_path.read_bytes)
-        except Exception as err:  # noqa: BLE001
+        except Exception as err:
             _LOGGER.warning("Failed to resolve QQ image source (%s): %s", source, err)
         return None
 

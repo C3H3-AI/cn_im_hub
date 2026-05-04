@@ -160,6 +160,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if runtimes and not hass.services.has_service(DOMAIN, SERVICE_SEND_MESSAGE):
         _register_services(hass)
 
+    from .tmp_cleanup import async_setup_tmp_cleanup
+    await async_setup_tmp_cleanup(hass)
+
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
 
@@ -183,6 +186,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not has_any_provider:
         if hass.services.has_service(DOMAIN, SERVICE_SEND_MESSAGE):
             hass.services.async_remove(DOMAIN, SERVICE_SEND_MESSAGE)
+        from .tmp_cleanup import async_unload_tmp_cleanup
+        await async_unload_tmp_cleanup(hass)
 
     return unload_ok
 

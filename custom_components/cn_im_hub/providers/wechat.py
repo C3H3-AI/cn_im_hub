@@ -11,10 +11,7 @@ import voluptuous as vol
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
-try:
-    from custom_components.claw_assistant.runtime.events import EVENT_LIVE_PROGRESS
-except ModuleNotFoundError:
-    EVENT_LIVE_PROGRESS = "claw_assistant_live_progress"
+EVENT_LIVE_PROGRESS = "ha_crack_live_progress"
 
 from ..camera_media import (
     async_capture_camera_gif,
@@ -126,7 +123,7 @@ def _compress_gif(raw: bytes, max_dim: int = _GIF_MAX_DIMENSION) -> bytes:
             optimize=True,
         )
         return out.getvalue()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         _LOGGER.debug("GIF compress failed (using original): %s", err)
         return raw
 
@@ -142,7 +139,7 @@ def _extract_file_text(raw: bytes, file_name: str) -> str:
     if ext in _FILE_TEXT_EXTENSIONS or not ext:
         try:
             return raw.decode("utf-8", errors="replace")
-        except Exception:  # noqa: BLE001
+        except Exception:
             return ""
     if ext in (".doc", ".docx"):
         try:
@@ -157,7 +154,7 @@ def _extract_file_text(raw: bytes, file_name: str) -> str:
                 "".join(node.text or "" for node in p.iter(f"{{{ns['w']}}}t"))
                 for p in tree.iter(f"{{{ns['w']}}}p")
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
             return ""
     return ""
 
@@ -348,7 +345,7 @@ class WeixinClient:
                     await self._handle_message(message)
             except asyncio.CancelledError:
                 raise
-            except Exception as err:  # noqa: BLE001
+            except Exception as err:
                 consecutive_failures += 1
                 self._status = "error"
                 _LOGGER.warning("Weixin long-poll error (%s): %s", self._account_id, err)
@@ -384,7 +381,7 @@ class WeixinClient:
                 typing_ticket=ticket,
                 status=status,
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
             _LOGGER.debug("Weixin typing indicator failed for %s", user_id)
 
     async def _typing_keepalive(self, user_id: str, context_token: str) -> None:
@@ -444,7 +441,7 @@ class WeixinClient:
                 async with session.get(source, timeout=30) as resp:
                     if resp.status < 400:
                         return await resp.read()
-        except Exception:  # noqa: BLE001
+        except Exception:
             _LOGGER.warning("Failed to resolve image source: %s", source)
         return None
 
@@ -461,15 +458,17 @@ class WeixinClient:
                 aeskey_hex=media.aeskey_hex or None,
             )
             if media.kind == "image":
-                import tempfile
+                import uuid
+                from pathlib import Path
                 compressed = await self._hass.async_add_executor_job(
                     _compress_image, raw, 640, 60
                 )
-                tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
-                tmp.write(compressed)
-                tmp.close()
+                tmp_dir = Path(self._hass.config.path(".storage", "cn_im_hub", "tmp"))
+                tmp_dir.mkdir(parents=True, exist_ok=True)
+                tmp_path = tmp_dir / f"wx_{uuid.uuid4().hex[:12]}.jpg"
+                await self._hass.async_add_executor_job(tmp_path.write_bytes, compressed)
                 prefix = text + "\n" if text else ""
-                return f"{prefix}[ATTACHMENT:image/jpeg:{tmp.name}]"
+                return f"{prefix}[ATTACHMENT:image/jpeg:{tmp_path}]"
             if media.kind == "file":
                 file_text = await self._hass.async_add_executor_job(
                     _extract_file_text, raw, media.file_name
@@ -478,7 +477,7 @@ class WeixinClient:
                     prefix = text + "\n" if text else ""
                     name = media.file_name or "file"
                     return f"{prefix}[用户发送了文件 {name}，内容如下：]\n{file_text[:8000]}"
-        except Exception:  # noqa: BLE001
+        except Exception:
             _LOGGER.exception("Failed to process inbound media: %s", media.kind)
         return text or ""
 
@@ -585,7 +584,7 @@ class WeixinClient:
                             context_token=resolved_context,
                             video_bytes=video_bytes,
                         )
-                    except Exception as err:  # noqa: BLE001
+                    except Exception as err:
                         _LOGGER.warning("Weixin video send failed: %s", err)
                         await async_send_weixin_text(
                             self._hass,
@@ -620,7 +619,7 @@ class WeixinClient:
                             context_token=resolved_context,
                             image_bytes=gif_bytes,
                         )
-                    except Exception as err:  # noqa: BLE001
+                    except Exception as err:
                         _LOGGER.warning("Weixin gif send failed: %s", err)
                         await async_send_weixin_text(
                             self._hass,
@@ -644,7 +643,7 @@ class WeixinClient:
                             file_bytes=file_bytes,
                             file_name=file_name,
                         )
-                    except Exception as err:  # noqa: BLE001
+                    except Exception as err:
                         _LOGGER.warning("Weixin file send failed: %s", err)
                         await async_send_weixin_text(
                             self._hass,

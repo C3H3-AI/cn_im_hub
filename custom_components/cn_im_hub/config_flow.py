@@ -24,7 +24,7 @@ async def _get_preferred_agent_id(hass) -> str:
         pipeline = async_get_pipeline(hass)
         if isinstance(pipeline.conversation_engine, str) and pipeline.conversation_engine:
             return pipeline.conversation_engine
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         _LOGGER.debug("Unable to resolve preferred assist pipeline: %r", err)
     return ""
 

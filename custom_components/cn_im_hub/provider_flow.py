@@ -74,7 +74,7 @@ class SimpleProviderSubentryFlow(BaseProviderSubentryFlow):
             data = _normalize_user_input(user_input)
             try:
                 await self._provider_spec.validate_config(self.hass, data)
-            except Exception as err:  # noqa: BLE001
+            except Exception as err:
                 _LOGGER.warning("Provider validation failed (%s): %s", self._provider_spec.key, err)
                 errors["base"] = "cannot_connect"
             else:

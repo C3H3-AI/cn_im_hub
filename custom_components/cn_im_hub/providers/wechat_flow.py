@@ -51,7 +51,7 @@ class WeixinProviderSubentryFlow(ConfigSubentryFlow):
                 login=self._current["wechat_login_session"],
                 base_url=str(self._current.get(CONF_WECHAT_BASE_URL, WECHAT_DEFAULT_BASE_URL)),
             )
-        except Exception as err:  # noqa: BLE001
+        except Exception as err:
             _LOGGER.warning("Weixin QR login wait failed: %s", err)
             return self.async_show_form(
                 step_id="auth_wait",
