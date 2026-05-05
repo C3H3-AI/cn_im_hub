@@ -120,8 +120,13 @@ def _normalize_agent_id_for_runtime(hass: HomeAssistant, agent_id: str) -> str:
         return candidate
 
     if candidate.startswith("conversation."):
-        entity = er.async_get(hass).async_get(candidate)
-        if entity and entity.config_entry_id:
-            return entity.config_entry_id
+        return candidate
+
+    entity_registry = er.async_get(hass)
+    for entry in entity_registry.entities.values():
+        if entry.domain != "conversation":
+            continue
+        if entry.config_entry_id == candidate:
+            return entry.entity_id
 
     return candidate
