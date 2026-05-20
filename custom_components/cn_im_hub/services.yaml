@@ -126,6 +126,6 @@ send_message:
           max: 10
     card_json:
       required: false
-      description: JSON string of an interactive card following the Feishu card schema. Currently only Feishu supports this. When used with camera_entity, the camera snapshot is automatically embedded into the card.
+      description: JSON string of an interactive card to send. When used with camera_entity, the camera snapshot is automatically embedded into the card.
       selector:
         text:
