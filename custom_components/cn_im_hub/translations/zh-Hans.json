@@ -34,7 +34,7 @@
         },
         "camera_entity": {
           "name": "摄像头实体",
-          "description": "抓取该摄像头当前快照并作为图片发送。当前支持 WeChat、WeCom、Feishu 和 QQ。"
+          "description": "抓取该摄像头当前快照并作为图片发送。当前支持 WeChat、WeCom、Feishu 和 QQ。与 card_json 同时使用时，截图会嵌入到卡片中。"
         },
         "tts_text": {
           "name": "语音文本",
@@ -75,6 +75,10 @@
         "gif_fps": {
           "name": "GIF 帧率",
           "description": "从摄像头快照生成动图时的每秒帧数。"
+        },
+        "card_json": {
+          "name": "交互卡片",
+          "description": "要发送的飞书消息卡片 JSON，遵循飞书卡片规范。当前仅飞书支持。与 camera_entity 同时使用时，截图会自动嵌入卡片。"
         }
       }
     }
