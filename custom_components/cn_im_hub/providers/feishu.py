@@ -13,6 +13,8 @@ from typing import Any
 
 import aiohttp
 import voluptuous as vol
+from aiohttp import web
+from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -21,6 +23,7 @@ from ..const import (
     CONF_FEISHU_APP_ID,
     CONF_FEISHU_APP_SECRET,
     DEFAULT_FEISHU_TARGET_TYPE,
+    DOMAIN,
     PROVIDER_FEISHU,
 )
 from ..known_targets import async_get_tracker
@@ -529,3 +532,72 @@ PROVIDER_SPEC = ProviderSpec(
     validate_config=async_validate_config,
     setup_provider=async_setup_provider,
 )
+
+
+class FeishuCardCallbackView(HomeAssistantView):
+    requires_auth = False
+    url = "/api/cn_im_hub/feishu/card_callback"
+    name = "api:cn_im_hub:feishu:card_callback"
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        self._hass = hass
+
+    async def post(self, request: web.Request) -> web.Response:
+        try:
+            raw = await request.text()
+            _LOGGER.info("Feishu card callback raw body: %s", raw[:2000])
+
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                _LOGGER.warning("Feishu card callback: invalid JSON body")
+                return web.json_response({})
+
+            if data.get("type") == "url_verification":
+                challenge = data.get("challenge", "")
+                _LOGGER.info("Feishu URL verification: challenge=%s", challenge)
+                return web.json_response({"challenge": challenge})
+
+            event = data.get("event", {})
+            action = event.get("action", {})
+            operator = event.get("operator", {})
+            action_value = action.get("value", {})
+            if isinstance(action_value, str):
+                try:
+                    action_value = json.loads(action_value)
+                except (json.JSONDecodeError, TypeError):
+                    action_value = {}
+
+            event_data = {
+                "action": action,
+                "operator": operator,
+                "token": data.get("token", ""),
+                "raw_data": data,
+            }
+
+            self._hass.bus.async_fire(f"{DOMAIN}_feishu_card_action", event_data)
+            _LOGGER.info(
+                "Feishu card action fired: value=%s, operator=%s",
+                json.dumps(action_value, ensure_ascii=False)[:300],
+                json.dumps(operator, ensure_ascii=False)[:200],
+            )
+
+            toast_content = "OK"
+            if isinstance(action_value, dict):
+                toast_tmpl = action_value.get("toast")
+                if toast_tmpl:
+                    try:
+                        toast_content = toast_tmpl.format(**action_value)
+                    except (KeyError, IndexError, ValueError):
+                        toast_content = toast_tmpl
+
+            return web.json_response({
+                "toast": {"type": "info", "content": toast_content}
+            })
+
+        except Exception:
+            _LOGGER.exception("Feishu card callback error")
+            return web.json_response({"error": "internal error"}, status=400)
+
+    async def get(self, request: web.Request) -> web.Response:
+        return web.json_response({"status": "ok", "message": "Feishu card callback endpoint is active"})

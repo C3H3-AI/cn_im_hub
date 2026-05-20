@@ -126,6 +126,6 @@ send_message:
           max: 10
     card_json:
       required: false
-      description: JSON string of an interactive card to send. Currently supported by Feishu. When provided, other message fields are ignored.
+      description: JSON string of an interactive card to send. When provided, other message fields are ignored.
       selector:
         text:
