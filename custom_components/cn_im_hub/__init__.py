@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
+from homeassistant.components.http import HomeAssistantView
+from aiohttp import web
 import voluptuous as vol
 
 from .const import (
@@ -57,6 +60,48 @@ from .providers.registry import get_provider_specs
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS = [Platform.SENSOR, Platform.SELECT]
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+
+class FeishuCardCallbackView(HomeAssistantView):
+    requires_auth = False
+    url = "/api/cn_im_hub/feishu/card_callback"
+    name = "api:cn_im_hub:feishu:card_callback"
+
+    def __init__(self, hass: HomeAssistant):
+        self._hass = hass
+
+    async def post(self, request: web.Request) -> web.Response:
+        try:
+            data = await request.json()
+            _LOGGER.debug("Feishu card callback received: %s", json.dumps(data, ensure_ascii=False)[:1000])
+
+            if data.get("type") == "url_verification":
+                challenge = data.get("challenge", "")
+                _LOGGER.info("Feishu URL verification: challenge=%s", challenge)
+                return web.json_response({"challenge": challenge})
+
+            event = data.get("event", {})
+            action = event.get("action", {})
+            operator = event.get("operator", {})
+            
+            event_data = {
+                "action": action,
+                "operator": operator,
+                "token": data.get("token", ""),
+                "raw_data": data,
+            }
+
+            self._hass.bus.async_fire(f"{DOMAIN}_feishu_card_action", event_data)
+            _LOGGER.info("Feishu card action event fired: action=%s", json.dumps(action, ensure_ascii=False)[:500])
+
+            return web.json_response({})
+
+        except Exception as e:
+            _LOGGER.exception("Feishu card callback error")
+            return web.json_response({"error": str(e)}, status=400)
+
+    async def get(self, request: web.Request) -> web.Response:
+        return web.json_response({"status": "ok", "message": "Feishu card callback endpoint is active"})
 
 SERVICE_SEND_MESSAGE_SCHEMA = vol.Schema(
     {
@@ -164,6 +209,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     from .tmp_cleanup import async_setup_tmp_cleanup
     await async_setup_tmp_cleanup(hass)
+
+    hass.http.register_view(FeishuCardCallbackView(hass))
+    _LOGGER.info("Feishu card callback view registered at /api/cn_im_hub/feishu/card_callback")
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
