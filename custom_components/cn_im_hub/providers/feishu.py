@@ -169,6 +169,44 @@ class FeishuApiClient:
         except Exception as err:
             _LOGGER.warning("Failed to send message back to Feishu: %s", err)
 
+    async def async_send_card_message(
+        self,
+        *,
+        receive_id: str,
+        card: dict[str, Any],
+        receive_id_type: str = DEFAULT_FEISHU_TARGET_TYPE,
+    ) -> None:
+        content = json.dumps(card, ensure_ascii=False)
+
+        def _send() -> None:
+            lark, _ = _import_lark()
+            client = (
+                lark.Client.builder()
+                .app_id(self._app_id)
+                .app_secret(self._app_secret)
+                .log_level(lark.LogLevel.INFO)
+                .build()
+            )
+            request = (
+                lark.im.v1.CreateMessageRequest.builder()
+                .receive_id_type(receive_id_type)
+                .request_body(
+                    lark.im.v1.CreateMessageRequestBody.builder()
+                    .receive_id(receive_id)
+                    .msg_type("interactive")
+                    .content(content)
+                    .build()
+                )
+                .build()
+            )
+            response = client.im.v1.message.create(request)
+            if not response.success():
+                raise RuntimeError(
+                    f"send card failed code={response.code}, msg={response.msg}, log_id={response.get_log_id()}"
+                )
+
+        await self._hass.async_add_executor_job(_send)
+
 
 class FeishuWsClient:
     """Manage Feishu websocket lifecycle and callbacks."""
@@ -452,6 +490,13 @@ async def async_setup_provider(
             receive_id_type=target_type or DEFAULT_FEISHU_TARGET_TYPE,
         )
 
+    async def _send_card(target: str, card: dict[str, Any], target_type: str) -> None:
+        await api_client.async_send_card_message(
+            receive_id=target,
+            card=card,
+            receive_id_type=target_type or DEFAULT_FEISHU_TARGET_TYPE,
+        )
+
     return ProviderRuntime(
         key=PROVIDER_FEISHU,
         title="Feishu",
@@ -464,6 +509,7 @@ async def async_setup_provider(
         selected_target=tracker.selected_target,
         select_target=tracker.async_select_target,
         send_image=_send_image,
+        send_card=_send_card,
     )
 
 

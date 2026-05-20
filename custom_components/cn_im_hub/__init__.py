@@ -15,6 +15,7 @@ import voluptuous as vol
 from .const import (
     ATTR_APPROVAL_ID,
     ATTR_CAMERA_ENTITY,
+    ATTR_CARD_JSON,
     ATTR_CHANNEL,
     ATTR_FILE_NAME,
     ATTR_FILE_PATH,
@@ -74,6 +75,7 @@ SERVICE_SEND_MESSAGE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_RECORD_DURATION): vol.Coerce(int),
         vol.Optional(ATTR_LOOKBACK, default=0): vol.Coerce(int),
         vol.Optional(ATTR_GIF_FPS, default=2): vol.Coerce(int),
+        vol.Optional(ATTR_CARD_JSON, default=""): cv.string,
     }
 )
 
@@ -299,7 +301,8 @@ def _register_services(hass: HomeAssistant) -> None:
         lookback = int(call.data.get(ATTR_LOOKBACK, 0) or 0)
         gif_fps = int(call.data.get(ATTR_GIF_FPS, 2) or 2)
         wechat_account_id = str(call.data.get(ATTR_WECHAT_ACCOUNT_ID, "")).strip()
-        if not message and not camera_entity and not file_path and not file_url and not tts_text:
+        card_json = str(call.data.get(ATTR_CARD_JSON, "")).strip()
+        if not message and not camera_entity and not file_path and not file_url and not tts_text and not card_json:
             return
         requested, normalized_target_type = _parse_channel(channel)
         resolved_target = str(target or "").strip()
@@ -332,6 +335,13 @@ def _register_services(hass: HomeAssistant) -> None:
             resolved_target = provider.selected_target()
         if not resolved_target:
             raise ValueError("target is required, or select a known target in the provider target selector entity")
+        if card_json:
+            if provider.send_card is None:
+                raise ValueError(f"Provider '{requested}' does not support card sending")
+            import json as _json
+            card = _json.loads(card_json)
+            await provider.send_card(resolved_target, card, normalized_target_type)
+            return
         if approval_id:
             if provider.send_approval is None:
                 raise ValueError(f"Provider '{requested}' does not support approval buttons")
