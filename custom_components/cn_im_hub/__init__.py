@@ -72,8 +72,14 @@ class FeishuCardCallbackView(HomeAssistantView):
 
     async def post(self, request: web.Request) -> web.Response:
         try:
-            data = await request.json()
-            _LOGGER.debug("Feishu card callback received: %s", json.dumps(data, ensure_ascii=False)[:1000])
+            raw = await request.text()
+            _LOGGER.info("Feishu card callback raw body: %s", raw[:2000])
+
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                _LOGGER.warning("Feishu card callback: invalid JSON body")
+                return web.json_response({})
 
             if data.get("type") == "url_verification":
                 challenge = data.get("challenge", "")
@@ -83,7 +89,13 @@ class FeishuCardCallbackView(HomeAssistantView):
             event = data.get("event", {})
             action = event.get("action", {})
             operator = event.get("operator", {})
-            
+            action_value = action.get("value", {})
+            if isinstance(action_value, str):
+                try:
+                    action_value = json.loads(action_value)
+                except (json.JSONDecodeError, TypeError):
+                    action_value = {}
+
             event_data = {
                 "action": action,
                 "operator": operator,
@@ -92,9 +104,24 @@ class FeishuCardCallbackView(HomeAssistantView):
             }
 
             self._hass.bus.async_fire(f"{DOMAIN}_feishu_card_action", event_data)
-            _LOGGER.info("Feishu card action event fired: action=%s", json.dumps(action, ensure_ascii=False)[:500])
+            _LOGGER.info(
+                "Feishu card action fired: value=%s, operator=%s",
+                json.dumps(action_value, ensure_ascii=False)[:300],
+                json.dumps(operator, ensure_ascii=False)[:200],
+            )
 
-            return web.json_response({})
+            toast_content = "已收到"
+            if isinstance(action_value, dict):
+                act = action_value.get("action", "")
+                door = action_value.get("door", "")
+                if act == "unlock" and door:
+                    toast_content = f"正在开门: {door}"
+                elif act == "ignore":
+                    toast_content = "已忽略"
+
+            return web.json_response({
+                "toast": {"type": "info", "content": toast_content}
+            })
 
         except Exception as e:
             _LOGGER.exception("Feishu card callback error")
