@@ -1,4 +1,4 @@
-﻿# 即时通信合集 / CN IM Hub
+# 即时通信合集 / CN IM Hub
 
 把常见即时通信平台聚合到一个 Home Assistant 集成中。  
 Aggregate common Chinese IM platforms into one Home Assistant integration.
@@ -37,6 +37,12 @@ Aggregate common Chinese IM platforms into one Home Assistant integration.
   `camera_entity` can capture and send snapshots directly.
 - 图片出站当前支持 `WeChat`、`WeCom`、`Feishu`、`QQ`、`DingTalk`  
   Outbound image sending currently supports WeChat, WeCom, Feishu, QQ, and DingTalk.
+- `card_json` 支持发送飞书交互卡片，可嵌入按钮、图片等组件  
+  `card_json` supports sending Feishu interactive cards with buttons, images, etc.
+- `card_json` + `camera_entity` 可自动将摄像头截图嵌入卡片  
+  `card_json` + `camera_entity` can auto-embed camera snapshots into cards.
+- 飞书卡片按钮回调自动触发 `cn_im_hub_feishu_card_action` 事件  
+  Feishu card button callbacks fire `cn_im_hub_feishu_card_action` events automatically.
 - 语音只在平台已提供识别文本时转给 HA  
   Voice is passed to HA only when the platform already provides transcript text.
 
@@ -63,6 +69,7 @@ Aggregate common Chinese IM platforms into one Home Assistant integration.
   - `target`
   - `message`
   - `camera_entity`
+  - `card_json`（飞书交互卡片） / Feishu interactive card
   - `wechat_account_id`（仅多微信账号时可选） / optional for multi-WeChat routing
 
 ## 目标地址格式 / Target Routing
@@ -75,6 +82,30 @@ Aggregate common Chinese IM platforms into one Home Assistant integration.
   With multiple personal WeChat accounts, `wechat_account_id` is usually not required unless routing is still ambiguous.
 - `camera_entity` 会抓取当前快照并作为图片发送。  
   `camera_entity` captures the current snapshot and sends it as an image.
+
+## 飞书交互卡片 / Feishu Interactive Card
+
+- `card_json` 参数填入飞书消息卡片 JSON，即可发送带按钮的交互卡片。  
+  Fill `card_json` with a Feishu message card JSON to send interactive cards with buttons.
+- 与 `camera_entity` 同时使用时，摄像头截图会自动嵌入卡片中（`hr` 之前）。  
+  When combined with `camera_entity`, the snapshot is auto-embedded before the first `hr` element.
+- 点击卡片按钮会触发 HA 事件 `cn_im_hub_feishu_card_action`，可用于自动化监听。  
+  Card button clicks fire the HA event `cn_im_hub_feishu_card_action` for automation triggers.
+
+### 飞书卡片回调地址 / Card Callback URL
+
+卡片按钮回调需要飞书能够访问你的 HA 实例：
+The card button callback requires Feishu to reach your HA instance:
+
+```
+https://<你的HA外网地址>/api/cn_im_hub/feishu/card_callback
+https://<your-HA-external-URL>/api/cn_im_hub/feishu/card_callback
+```
+
+- 该端点无需认证（`requires_auth = False`），由飞书服务端直接调用。  
+  This endpoint does not require authentication — it is called directly by Feishu servers.
+- 在飞书开放平台「事件与回调」中配置该地址即可。  
+  Configure this URL in the Feishu Open Platform under "Events & Callbacks".
 
 ## 对话方式 / Conversation Flow
 
