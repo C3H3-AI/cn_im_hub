@@ -3,7 +3,8 @@
   "name": "即时通信合集",
   "after_dependencies": [
     "conversation",
-    "assist_pipeline"
+    "assist_pipeline",
+    "http"
   ],
   "codeowners": [
     "@ha-china"
