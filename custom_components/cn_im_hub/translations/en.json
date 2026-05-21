@@ -75,6 +75,10 @@
         "gif_fps": {
           "name": "GIF FPS",
           "description": "Frames per second when generating an animated GIF from camera snapshots."
+        },
+        "card_json": {
+          "name": "Interactive Card",
+          "description": "Feishu interactive card JSON to send. Currently only supported by Feishu. When used with camera_entity, the camera snapshot is automatically embedded into the card."
         }
       }
     }

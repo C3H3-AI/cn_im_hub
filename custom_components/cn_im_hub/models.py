@@ -47,6 +47,7 @@ class ProviderRuntime:
     send_media: Callable[[str, bytes, str, str, str | None], Awaitable[None]] | None = None
     send_tts: Callable[[str, str, str], Awaitable[None]] | None = None
     send_approval: Callable[[str, str, str, str], Awaitable[None]] | None = None
+    send_card: Callable[[str, dict[str, Any], str], Awaitable[None]] | None = None
 
 
 @dataclass(slots=True)

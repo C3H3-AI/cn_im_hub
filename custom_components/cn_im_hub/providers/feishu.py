@@ -13,6 +13,8 @@ from typing import Any
 
 import aiohttp
 import voluptuous as vol
+from aiohttp import web
+from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -21,6 +23,7 @@ from ..const import (
     CONF_FEISHU_APP_ID,
     CONF_FEISHU_APP_SECRET,
     DEFAULT_FEISHU_TARGET_TYPE,
+    DOMAIN,
     PROVIDER_FEISHU,
 )
 from ..known_targets import async_get_tracker
@@ -168,6 +171,82 @@ class FeishuApiClient:
             )
         except Exception as err:
             _LOGGER.warning("Failed to send message back to Feishu: %s", err)
+
+    async def async_send_card_message(
+        self,
+        *,
+        receive_id: str,
+        card: dict[str, Any],
+        receive_id_type: str = DEFAULT_FEISHU_TARGET_TYPE,
+    ) -> None:
+        content = json.dumps(card, ensure_ascii=False)
+
+        def _send() -> None:
+            lark, _ = _import_lark()
+            client = (
+                lark.Client.builder()
+                .app_id(self._app_id)
+                .app_secret(self._app_secret)
+                .log_level(lark.LogLevel.INFO)
+                .build()
+            )
+            request = (
+                lark.im.v1.CreateMessageRequest.builder()
+                .receive_id_type(receive_id_type)
+                .request_body(
+                    lark.im.v1.CreateMessageRequestBody.builder()
+                    .receive_id(receive_id)
+                    .msg_type("interactive")
+                    .content(content)
+                    .build()
+                )
+                .build()
+            )
+            response = client.im.v1.message.create(request)
+            if not response.success():
+                raise RuntimeError(
+                    f"send card failed code={response.code}, msg={response.msg}, log_id={response.get_log_id()}"
+                )
+
+        await self._hass.async_add_executor_job(_send)
+
+    async def async_upload_image(self, image_data: bytes) -> str | None:
+        token = await self.async_get_tenant_access_token()
+        form = aiohttp.FormData()
+        form.add_field("image_type", "message")
+        form.add_field("image", image_data, filename="snapshot.jpg", content_type="image/jpeg")
+        async with asyncio.timeout(30):
+            upload_resp = await self._session.post(
+                "https://open.feishu.cn/open-apis/im/v1/images",
+                headers={"Authorization": f"Bearer {token}"},
+                data=form,
+            )
+        upload_data = await _async_read_json(upload_resp)
+        if upload_resp.status != 200 or upload_data.get("code") != 0:
+            _LOGGER.warning("Failed to upload image to Feishu: %s", upload_data.get("msg"))
+            return None
+        return str((upload_data.get("data") or {}).get("image_key") or "")
+
+
+async def async_inject_camera_snapshot(hass: HomeAssistant, card: dict[str, Any], image_data: bytes, ws_client: Any) -> bool:
+    """Upload camera snapshot to Feishu and inject it into the card. Returns True on success."""
+    app_id = getattr(ws_client, "_app_id", "")
+    app_secret = getattr(ws_client, "_app_secret", "")
+    if not app_id or not app_secret:
+        return False
+
+    feishu_api = FeishuApiClient(hass, app_id, app_secret)
+    image_key = await feishu_api.async_upload_image(image_data)
+    if not image_key:
+        return False
+
+    elements = card.get("elements", [])
+    elements.insert(
+        next((i for i, e in enumerate(elements) if e.get("tag") == "hr"), 0),
+        {"tag": "img", "img_key": image_key, "alt": {"tag": "plain_text", "content": "摄像头截图"}},
+    )
+    card["elements"] = elements
+    return True
 
 
 class FeishuWsClient:
@@ -452,6 +531,13 @@ async def async_setup_provider(
             receive_id_type=target_type or DEFAULT_FEISHU_TARGET_TYPE,
         )
 
+    async def _send_card(target: str, card: dict[str, Any], target_type: str) -> None:
+        await api_client.async_send_card_message(
+            receive_id=target,
+            card=card,
+            receive_id_type=target_type or DEFAULT_FEISHU_TARGET_TYPE,
+        )
+
     return ProviderRuntime(
         key=PROVIDER_FEISHU,
         title="Feishu",
@@ -464,6 +550,7 @@ async def async_setup_provider(
         selected_target=tracker.selected_target,
         select_target=tracker.async_select_target,
         send_image=_send_image,
+        send_card=_send_card,
     )
 
 
@@ -483,3 +570,72 @@ PROVIDER_SPEC = ProviderSpec(
     validate_config=async_validate_config,
     setup_provider=async_setup_provider,
 )
+
+
+class FeishuCardCallbackView(HomeAssistantView):
+    requires_auth = False
+    url = "/api/cn_im_hub/feishu/card_callback"
+    name = "api:cn_im_hub:feishu:card_callback"
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        self._hass = hass
+
+    async def post(self, request: web.Request) -> web.Response:
+        try:
+            raw = await request.text()
+            _LOGGER.info("Feishu card callback raw body: %s", raw[:2000])
+
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                _LOGGER.warning("Feishu card callback: invalid JSON body")
+                return web.json_response({})
+
+            if data.get("type") == "url_verification":
+                challenge = data.get("challenge", "")
+                _LOGGER.info("Feishu URL verification: challenge=%s", challenge)
+                return web.json_response({"challenge": challenge})
+
+            event = data.get("event", {})
+            action = event.get("action", {})
+            operator = event.get("operator", {})
+            action_value = action.get("value", {})
+            if isinstance(action_value, str):
+                try:
+                    action_value = json.loads(action_value)
+                except (json.JSONDecodeError, TypeError):
+                    action_value = {}
+
+            event_data = {
+                "action": action,
+                "operator": operator,
+                "token": data.get("token", ""),
+                "raw_data": data,
+            }
+
+            self._hass.bus.async_fire(f"{DOMAIN}_feishu_card_action", event_data)
+            _LOGGER.info(
+                "Feishu card action fired: value=%s, operator=%s",
+                json.dumps(action_value, ensure_ascii=False)[:300],
+                json.dumps(operator, ensure_ascii=False)[:200],
+            )
+
+            toast_content = "OK"
+            if isinstance(action_value, dict):
+                toast_tmpl = action_value.get("toast")
+                if toast_tmpl:
+                    try:
+                        toast_content = toast_tmpl.format(**action_value)
+                    except (KeyError, IndexError, ValueError):
+                        toast_content = toast_tmpl
+
+            return web.json_response({
+                "toast": {"type": "info", "content": toast_content}
+            })
+
+        except Exception:
+            _LOGGER.exception("Feishu card callback error")
+            return web.json_response({"error": "internal error"}, status=400)
+
+    async def get(self, request: web.Request) -> web.Response:
+        return web.json_response({"status": "ok", "message": "Feishu card callback endpoint is active"})

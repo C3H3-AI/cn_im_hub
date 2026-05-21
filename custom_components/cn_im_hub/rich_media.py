@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-_TAG_RE = re.compile(r"\[(IMAGE|VOICE|FILE|VIDEO|GIF):(.+?)\]")
+_TAG_RE = re.compile(r"\[(IMAGE|VOICE|FILE|VIDEO|GIF|CARD):(.+?)\]")
 _AGENT_PREFIX_ONLY = re.compile(r"^\(.+?\)\s*(?:回复|Reply)\s*[:：]?\s*$")
 
 
@@ -39,7 +39,12 @@ class GifSegment:
     source: str
 
 
-Segment = TextSegment | ImageSegment | VoiceSegment | FileSegment | VideoSegment | GifSegment
+@dataclass(slots=True)
+class CardSegment:
+    source: str
+
+
+Segment = TextSegment | ImageSegment | VoiceSegment | FileSegment | VideoSegment | GifSegment | CardSegment
 
 
 def parse_reply_segments(reply: str) -> list[Segment]:
@@ -61,13 +66,15 @@ def parse_reply_segments(reply: str) -> list[Segment]:
             segments.append(VideoSegment(source=payload))
         elif tag == "GIF" and payload:
             segments.append(GifSegment(source=payload))
+        elif tag == "CARD" and payload:
+            segments.append(CardSegment(source=payload))
         last_end = match.end()
     trailing = reply[last_end:].strip()
     if trailing:
         segments.append(TextSegment(text=trailing))
     if not segments and reply.strip():
         segments.append(TextSegment(text=reply.strip()))
-    has_media = any(isinstance(s, ImageSegment | VoiceSegment | FileSegment | VideoSegment | GifSegment) for s in segments)
+    has_media = any(isinstance(s, ImageSegment | VoiceSegment | FileSegment | VideoSegment | GifSegment | CardSegment) for s in segments)
     if has_media:
         prefix_text: str | None = None
         has_voice = any(isinstance(s, VoiceSegment) for s in segments)
