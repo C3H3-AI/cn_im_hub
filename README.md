@@ -39,12 +39,14 @@ Aggregate common Chinese IM platforms into one Home Assistant integration.
   Outbound image sending currently supports WeChat, WeCom, Feishu, QQ, and DingTalk.
 - 语音只在平台已提供识别文本时转给 HA  
   Voice is passed to HA only when the platform already provides transcript text.
-- 飞书自动卡片回复：当回复内容较长或包含列表/标题等结构时，自动以卡片形式发送  
-  Feishu auto-card reply: responses are automatically sent as interactive cards when they are long or contain structured content (lists, headings, etc.).
+- 飞书自动卡片回复：所有 AI 回复统一以飞书互动卡片形式发送  
+  Feishu card reply: all AI responses are sent as interactive cards.
+- 飞书卡片标题动态提取 AI 模型名称：当 AI 回复以 `(模型名)回复：` 开头时，卡片标题自动使用模型名  
+  Feishu card title dynamically extracts AI model name: when the AI reply starts with `(model-name)Reply:`, the card title shows the model name.
 - 飞书卡片 + 摄像头截图：`send_message` 同时传入 `card_json` 和 `camera_entity` 时，自动抓拍并嵌入卡片  
   Feishu card + camera snapshot: when `card_json` and `camera_entity` are both provided, the camera snapshot is automatically captured and injected into the card.
-- 飞书卡片回调：集成注册了 `/api/cn_im_hub/feishu/card_callback` 端点，接收卡片按钮交互事件  
-  Feishu card callback: the integration registers `/api/cn_im_hub/feishu/card_callback` to receive card button interaction events.
+- 飞书卡片回调：集成注册了 `/api/cn_im_hub/feishu/card_callback` 端点，接收卡片按钮交互事件；默认不校验回调 token，可在子服务配置中填入验证 Token 开启校验  
+  Feishu card callback: the integration registers `/api/cn_im_hub/feishu/card_callback` to receive card button interaction events; token verification is disabled by default and can be enabled by filling in the verification token in subentry config.
 
 ## 安装 / Installation
 

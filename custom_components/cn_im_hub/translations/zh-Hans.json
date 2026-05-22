@@ -91,7 +91,8 @@
           "title": "添加飞书",
           "data": {
             "app_id": "App ID",
-            "app_secret": "App Secret"
+            "app_secret": "App Secret",
+            "feishu_verification_token": "验证 Token（可选）"
           }
         }
       }
