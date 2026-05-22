@@ -236,6 +236,48 @@ class FeishuApiClient:
 
         await self._hass.async_add_executor_job(_send)
 
+    async def async_upload_image(self, image_data: bytes) -> str | None:
+        token = await self.async_get_tenant_access_token()
+        form = aiohttp.FormData()
+        form.add_field("image_type", "message")
+        form.add_field("image", image_data, filename="snapshot.jpg", content_type="image/jpeg")
+        async with asyncio.timeout(30):
+            upload_resp = await self._session.post(
+                "https://open.feishu.cn/open-apis/im/v1/images",
+                headers={"Authorization": f"Bearer {token}"},
+                data=form,
+            )
+        upload_data = await _async_read_json(upload_resp)
+        if upload_resp.status != 200 or upload_data.get("code") != 0:
+            _LOGGER.warning("Failed to upload image to Feishu: %s", upload_data.get("msg"))
+            return None
+        return str((upload_data.get("data") or {}).get("image_key") or "")
+
+
+async def async_inject_camera_snapshot(
+    hass: HomeAssistant,
+    card: dict[str, Any],
+    image_data: bytes,
+    ws_client: Any,
+) -> bool:
+    app_id = getattr(ws_client, "_app_id", "")
+    app_secret = getattr(ws_client, "_app_secret", "")
+    if not app_id or not app_secret:
+        return False
+
+    feishu_api = FeishuApiClient(hass, app_id, app_secret)
+    image_key = await feishu_api.async_upload_image(image_data)
+    if not image_key:
+        return False
+
+    elements = card.get("elements", [])
+    elements.insert(
+        next((i for i, e in enumerate(elements) if e.get("tag") == "hr"), 0),
+        {"tag": "img", "img_key": image_key, "alt": {"tag": "plain_text", "content": "摄像头截图"}},
+    )
+    card["elements"] = elements
+    return True
+
 
 class FeishuWsClient:
     """Manage Feishu websocket lifecycle and callbacks."""
