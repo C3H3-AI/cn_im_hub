@@ -39,6 +39,8 @@ Aggregate common Chinese IM platforms into one Home Assistant integration.
   Outbound image sending currently supports WeChat, WeCom, Feishu, QQ, and DingTalk.
 - 语音只在平台已提供识别文本时转给 HA  
   Voice is passed to HA only when the platform already provides transcript text.
+- 飞书卡片标题动态提取 AI 模型名称：当 AI 回复以 `(模型名)回复：` 开头时，卡片标题自动使用模型名  
+  Feishu card title dynamically extracts AI model name: when the AI reply starts with `(model-name)Reply:`, the card title shows the model name.
 
 ## 安装 / Installation
 
