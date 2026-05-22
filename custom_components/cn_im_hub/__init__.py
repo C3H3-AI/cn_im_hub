@@ -25,6 +25,7 @@ from .const import (
     ATTR_MESSAGE,
     ATTR_MESSAGE_FORMAT,
     ATTR_MEDIA_TYPE,
+    ATTR_PUSH,
     ATTR_RECORD_DURATION,
     ATTR_TARGET,
     ATTR_TTS_TEXT,
@@ -78,6 +79,7 @@ SERVICE_SEND_MESSAGE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_LOOKBACK, default=0): vol.Coerce(int),
         vol.Optional(ATTR_GIF_FPS, default=2): vol.Coerce(int),
         vol.Optional(ATTR_CARD_JSON, default=""): cv.string,
+        vol.Optional(ATTR_PUSH, default=False): cv.boolean,
     }
 )
 
@@ -309,6 +311,7 @@ def _register_services(hass: HomeAssistant) -> None:
         gif_fps = int(call.data.get(ATTR_GIF_FPS, 2) or 2)
         wechat_account_id = str(call.data.get(ATTR_WECHAT_ACCOUNT_ID, "")).strip()
         card_json = str(call.data.get(ATTR_CARD_JSON, "")).strip()
+        push = bool(call.data.get(ATTR_PUSH, False))
         if not message and not camera_entity and not file_path and not file_url and not tts_text and not card_json:
             return
         requested, normalized_target_type = _parse_channel(channel)
@@ -342,6 +345,14 @@ def _register_services(hass: HomeAssistant) -> None:
             resolved_target = provider.selected_target()
         if not resolved_target:
             raise ValueError("target is required, or select a known target in the provider target selector entity")
+        if push:
+            if provider.send_push is None:
+                raise ValueError(f"Provider '{requested}' does not support push notifications")
+            if not message:
+                raise ValueError("message is required when push is enabled")
+            result = await provider.send_push(resolved_target, message, normalized_target_type)
+            _LOGGER.info("Push notification sent via %s: %s", requested, result)
+            return
         if card_json:
             if provider.send_card is None:
                 raise ValueError(f"Provider '{requested}' does not support card sending")

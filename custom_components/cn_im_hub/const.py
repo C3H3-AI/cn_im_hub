@@ -20,6 +20,7 @@ CONF_AGENT_ID: Final = "agent_id"
 
 CONF_FEISHU_APP_ID: Final = "app_id"
 CONF_FEISHU_APP_SECRET: Final = "app_secret"
+CONF_FEISHU_VERIFICATION_TOKEN: Final = "feishu_verification_token"
 
 CONF_WECOM_BOT_ID: Final = "bot_id"
 CONF_WECOM_SECRET: Final = "secret"
@@ -68,6 +69,7 @@ ATTR_RECORD_DURATION: Final = "record_duration"
 ATTR_LOOKBACK: Final = "lookback"
 ATTR_GIF_FPS: Final = "gif_fps"
 ATTR_CARD_JSON: Final = "card_json"
+ATTR_PUSH: Final = "push"
 DEFAULT_VIDEO_RECORD_DURATION: Final = 10
 DEFAULT_GIF_DURATION: Final = 3
 

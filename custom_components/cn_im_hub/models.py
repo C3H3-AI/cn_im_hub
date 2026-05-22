@@ -48,6 +48,7 @@ class ProviderRuntime:
     send_tts: Callable[[str, str, str], Awaitable[None]] | None = None
     send_approval: Callable[[str, str, str, str], Awaitable[None]] | None = None
     send_card: Callable[[str, dict[str, Any], str], Awaitable[None]] | None = None
+    send_push: Callable[[str, str, str], Awaitable[dict[str, Any]]] | None = None
 
 
 @dataclass(slots=True)

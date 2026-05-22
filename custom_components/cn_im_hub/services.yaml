@@ -131,3 +131,8 @@ send_message:
       description: JSON string of an interactive card following the Feishu card schema, or a CardDataObject for XiaoYi. Feishu and XiaoYi support this. When used with camera_entity, the camera snapshot is automatically embedded into the card.
       selector:
         text:
+    push:
+      required: false
+      description: When true and the provider supports proactive push (currently XiaoYi only), use the PUSH webhook instead of the session-based send. This allows sending messages without an active user conversation.
+      selector:
+        boolean:

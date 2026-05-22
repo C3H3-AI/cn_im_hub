@@ -295,8 +295,8 @@ class XiaoYiClient:
                 "status": {"state": "completed"},
             },
         }
-        if agent_login_session_id:
-            body["result"]["agentLoginSessionId"] = agent_login_session_id
+        resolved_session_id = agent_login_session_id or session_id
+        body["result"]["agentLoginSessionId"] = resolved_session_id
 
         try:
             async with self._session.post(
@@ -1053,6 +1053,14 @@ async def async_setup_provider(
     ) -> None:
         await client.send_card(target, card_data, target_type)
 
+    async def _send_push(
+        target: str, push_text: str, target_type: str
+    ) -> dict[str, Any]:
+        return await client.send_push(
+            session_id=target,
+            push_text=push_text,
+        )
+
     return ProviderRuntime(
         key=PROVIDER_XIAOYI,
         title="XiaoYi",
@@ -1062,6 +1070,7 @@ async def async_setup_provider(
         send_text=_send,
         send_image=_send_image,
         send_card=_send_card,
+        send_push=_send_push,
         status=lambda: client.status,
         known_targets=tracker.snapshot,
         selected_target=tracker.selected_target,
