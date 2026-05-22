@@ -628,7 +628,6 @@ class FeishuCardCallbackView(HomeAssistantView):
     async def post(self, request: web.Request) -> web.Response:
         try:
             raw = await request.text()
-            _LOGGER.info("Feishu card callback raw body: %s", raw[:2000])
 
             try:
                 data = json.loads(raw)
@@ -640,6 +639,11 @@ class FeishuCardCallbackView(HomeAssistantView):
                 challenge = data.get("challenge", "")
                 _LOGGER.info("Feishu URL verification: challenge=%s", challenge)
                 return web.json_response({"challenge": challenge})
+
+            callback_token = data.get("token", "")
+            if not callback_token:
+                _LOGGER.warning("Feishu card callback: missing token, rejecting")
+                return web.json_response({"error": "unauthorized"}, status=401)
 
             event = data.get("event", {})
             action = event.get("action", {})
@@ -654,7 +658,6 @@ class FeishuCardCallbackView(HomeAssistantView):
             event_data = {
                 "action": action,
                 "operator": operator,
-                "token": data.get("token", ""),
                 "raw_data": data,
             }
 

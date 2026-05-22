@@ -344,7 +344,10 @@ def _register_services(hass: HomeAssistant) -> None:
             if provider.send_card is None:
                 raise ValueError(f"Provider '{requested}' does not support card sending")
             import json as _json
-            card = _json.loads(card_json)
+            try:
+                card = _json.loads(card_json)
+            except _json.JSONDecodeError as err:
+                raise ValueError(f"Invalid card_json: {err}") from err
             if camera_entity and requested == "feishu":
                 resolved_camera_entity = await async_resolve_camera_entity(hass, camera_entity)
                 if resolved_camera_entity is not None:
