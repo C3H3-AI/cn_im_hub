@@ -487,6 +487,17 @@ class QQClient:
                 )
                 state.last_sent_text = text
                 last_emit = asyncio.get_running_loop().time()
+        except asyncio.CancelledError:
+            while not queue.empty():
+                text = queue.get_nowait()
+                if text and text != state.last_sent_text:
+                    with contextlib.suppress(Exception):
+                        await self._send_text_message(
+                            inbound.target,
+                            text,
+                            reply_to_message_id=inbound.message_id or None,
+                        )
+                    state.last_sent_text = text
         finally:
             unsub()
 
@@ -604,6 +615,12 @@ class QQClient:
                 agent_id=self._agent_id,
                 extra_system_prompt=self._build_upstream_prompt(inbound),
             )
+            if progress_task is not None:
+                progress_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await progress_task
+                progress_task = None
+                await asyncio.sleep(0.3)
             if not reply:
                 return
             segments = parse_reply_segments(reply)

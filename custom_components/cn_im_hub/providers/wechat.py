@@ -426,6 +426,20 @@ class WeixinClient:
                     text=text,
                 )
                 last_sent = text
+        except asyncio.CancelledError:
+            while not queue.empty():
+                text = queue.get_nowait()
+                if text and text != last_sent:
+                    with contextlib.suppress(Exception):
+                        await async_send_weixin_text(
+                            self._hass,
+                            base_url=self._base_url,
+                            token=self._token,
+                            to_user_id=to_user_id,
+                            context_token=context_token,
+                            text=text,
+                        )
+                    last_sent = text
         finally:
             unsub()
 
@@ -533,6 +547,12 @@ class WeixinClient:
                     supports_file=True,
                 ),
             )
+            if progress_task is not None:
+                progress_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await progress_task
+                progress_task = None
+                await asyncio.sleep(0.3)
             if not reply:
                 return
             _LOGGER.info("Reply to parse: %r", reply[:200])
