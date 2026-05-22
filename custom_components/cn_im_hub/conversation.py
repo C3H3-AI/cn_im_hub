@@ -12,6 +12,36 @@ from homeassistant.helpers import entity_registry as er
 _LOGGER = logging.getLogger(__name__)
 
 
+def extract_card(response: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Extract card dict from conversation response payload."""
+    if not response:
+        return None
+    card = response.get("response", {}).get("card", None)
+    if isinstance(card, dict):
+        return card
+    return None
+
+
+def extract_card_from_obj(response: Any) -> dict[str, Any] | None:
+    """Extract card from either dict or HA conversation response object."""
+    if isinstance(response, dict):
+        return extract_card(response)
+    try:
+        card = getattr(response.response, "card", None)
+        if isinstance(card, dict):
+            return card
+    except Exception:
+        pass
+    if hasattr(response, "as_dict"):
+        try:
+            data = response.as_dict()
+            if isinstance(data, dict):
+                return extract_card(data)
+        except Exception:
+            pass
+    return None
+
+
 def extract_speech(response: dict[str, Any] | None) -> str:
     """Extract plain speech text from conversation response payload."""
     if not response:
@@ -112,6 +142,67 @@ async def ask_home_assistant(
             return reply
 
     return "暂时无法生成回复，请检查当前 conversation agent 配置。"
+
+async def ask_home_assistant_with_card(
+    hass: HomeAssistant,
+    text: str,
+    *,
+    conversation_id: str,
+    agent_id: str | None,
+    extra_system_prompt: str | None = None,
+) -> tuple[str, dict[str, Any] | None]:
+    """Route text through HA conversation and return (text, card_or_None)."""
+    resolved_agent_id = _normalize_agent_id_for_runtime(hass, str(agent_id or "").strip())
+    try:
+        from homeassistant.components import conversation as conversation_component
+
+        if hasattr(conversation_component, "async_converse"):
+            signature = inspect.signature(conversation_component.async_converse)
+            kwargs: dict[str, Any] = {}
+            if "hass" in signature.parameters:
+                kwargs["hass"] = hass
+            if "text" in signature.parameters:
+                kwargs["text"] = text
+            if "conversation_id" in signature.parameters and conversation_id:
+                kwargs["conversation_id"] = conversation_id
+            if "context" in signature.parameters:
+                kwargs["context"] = Context()
+            if "language" in signature.parameters:
+                kwargs["language"] = hass.config.language
+            if "agent_id" in signature.parameters and resolved_agent_id:
+                kwargs["agent_id"] = resolved_agent_id
+            if "extra_system_prompt" in signature.parameters and extra_system_prompt:
+                kwargs["extra_system_prompt"] = extra_system_prompt
+
+            result = await conversation_component.async_converse(**kwargs)
+            reply = extract_speech_any(result)
+            card = extract_card_from_obj(result)
+            if reply:
+                return reply, card
+    except Exception as err:
+        _LOGGER.debug("cn_im_hub async_converse failed with agent_id=%s: %s", resolved_agent_id, err)
+
+    if hass.services.has_service("conversation", "process"):
+        data: dict[str, Any] = {
+            "text": text,
+            "conversation_id": conversation_id,
+            "language": hass.config.language,
+        }
+        if resolved_agent_id:
+            data["agent_id"] = resolved_agent_id
+        result = await hass.services.async_call(
+            "conversation",
+            "process",
+            data,
+            blocking=True,
+            return_response=True,
+        )
+        reply = extract_speech(result)
+        card = extract_card(result)
+        if reply:
+            return reply, card
+
+    return "暂时无法生成回复，请检查当前 conversation agent 配置。", None
 
 
 def _normalize_agent_id_for_runtime(hass: HomeAssistant, agent_id: str) -> str:

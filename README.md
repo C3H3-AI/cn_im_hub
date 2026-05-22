@@ -1,4 +1,4 @@
-﻿# 即时通信合集 / CN IM Hub
+# 即时通信合集 / CN IM Hub
 
 把常见即时通信平台聚合到一个 Home Assistant 集成中。  
 Aggregate common Chinese IM platforms into one Home Assistant integration.
@@ -82,6 +82,16 @@ Aggregate common Chinese IM platforms into one Home Assistant integration.
   Messages are forwarded to the HA conversation agent bound to the integration-level `agent_id`.
 - 以自然语言对话为主。  
   Natural-language conversation is the main interaction style.
+- **飞书卡片回复 / Feishu Card Reply**：
+  - 智能判断长回复、操作命令或带格式内容自动发送为卡片
+  - 支持 `cn_im_hub.send_message` 的 `card_json` 参数发送自定义卡片
+  - 支持 `camera_entity` 与卡片结合，自动注入摄像头截图
+
+## Feishu 卡片功能 / Feishu Card Feature
+
+- 自动卡片：长文本（>100字）、包含控制指令或格式化内容的回复自动转为卡片
+- 自定义卡片：通过 `card_json` 参数调用 `cn_im_hub.send_message` 发送自定义卡片
+- 截图注入：结合 `camera_entity` 与 `card_json` 可自动把摄像头快照注入到卡片中
 
 ## 参考 / References
 

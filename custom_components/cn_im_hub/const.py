@@ -81,6 +81,7 @@ CHANNEL_QQ_CHANNEL: Final = "qq/channel"
 CHANNEL_DINGTALK_USER: Final = "dingtalk/user"
 CHANNEL_DINGTALK_GROUP: Final = "dingtalk/group"
 CHANNEL_WECHAT_USER_ID: Final = "wechat/user_id"
+CHANNEL_XIAOYI_SESSION_ID: Final = "xiaoyi/session_id"
 
 CHANNEL_OPTIONS: Final = (
     CHANNEL_FEISHU_CHAT_ID,
@@ -91,4 +92,5 @@ CHANNEL_OPTIONS: Final = (
     CHANNEL_DINGTALK_USER,
     CHANNEL_DINGTALK_GROUP,
     CHANNEL_WECHAT_USER_ID,
+    CHANNEL_XIAOYI_SESSION_ID,
 )

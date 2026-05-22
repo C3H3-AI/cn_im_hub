@@ -38,6 +38,7 @@ from .const import (
     CHANNEL_QQ_USER,
     CHANNEL_WECHAT_USER_ID,
     CHANNEL_WECOM_CHATID,
+    CHANNEL_XIAOYI_SESSION_ID,
     CONF_AGENT_ID,
     DEFAULT_GIF_DURATION,
     DEFAULT_VIDEO_RECORD_DURATION,
@@ -281,6 +282,7 @@ def _parse_channel(channel: str) -> tuple[str, str]:
         CHANNEL_DINGTALK_USER: ("dingtalk", "user"),
         CHANNEL_DINGTALK_GROUP: ("dingtalk", "group"),
         CHANNEL_WECHAT_USER_ID: ("wechat", "user_id"),
+        CHANNEL_XIAOYI_SESSION_ID: ("xiaoyi", "session_id"),
     }
     mapped = mapping.get(value)
     if mapped is None:

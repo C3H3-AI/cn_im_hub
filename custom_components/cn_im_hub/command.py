@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from homeassistant.core import HomeAssistant
 
-from .conversation import ask_home_assistant
+from .conversation import ask_home_assistant_with_card
 from .models import Command
 
 
@@ -33,20 +35,21 @@ async def execute_command(
     conversation_id: str,
     agent_id: str | None,
     extra_system_prompt: str | None = None,
-) -> str:
-    """Execute parsed command against Home Assistant."""
+) -> dict[str, Any]:
+    """Execute parsed command against Home Assistant. Returns {"text": str, "card": dict|None}."""
     if command.kind == "conversation":
         text = command.target
         for prefix, name in _IM_PREFIXES.items():
             if conversation_id.startswith(prefix):
                 text = f"[IM:{name}|{conversation_id}] {text}"
                 break
-        return await ask_home_assistant(
+        reply_text, card = await ask_home_assistant_with_card(
             hass,
             text,
             conversation_id=conversation_id,
             agent_id=agent_id,
             extra_system_prompt=extra_system_prompt,
         )
+        return {"text": reply_text, "card": card}
 
-    return "当前仅支持自然语言对话。"
+    return {"text": "当前仅支持自然语言对话。", "card": None}

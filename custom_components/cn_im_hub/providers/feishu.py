@@ -33,6 +33,34 @@ from .base import ProviderSpec
 _LOGGER = logging.getLogger(__name__)
 _TOKEN_URL = "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"
 _REPLY_MAX_LENGTH = 1800
+_CARD_TEMPLATE_LENGTH_THRESHOLD = 100
+
+
+def _should_send_as_card(text: str) -> bool:
+    """判断是否应该将回复发送为卡片格式"""
+    if len(text) > _CARD_TEMPLATE_LENGTH_THRESHOLD:
+        return True
+    if any(keyword in text for keyword in ["打开", "关闭", "控制", "设置", "调整", "开启", "停止"]):
+        return True
+    if any(symbol in text for symbol in ["\n-", "\n•", "\n*", "\n1.", "##", "###"]):
+        return True
+    return False
+
+
+def _build_response_card(text: str) -> dict:
+    """构建漂亮的飞书回复卡片"""
+    return {
+        "header": {
+            "title": {"content": "Claw AI 助手", "tag": "plain_text"},
+            "template": "blue",
+        },
+        "elements": [
+            {
+                "tag": "div",
+                "text": {"content": text[:_REPLY_MAX_LENGTH], "tag": "plain_text"},
+            },
+        ],
+    }
 
 
 def _import_lark() -> tuple[Any, Any]:
@@ -480,7 +508,17 @@ async def async_setup_provider(
             display_name=user_id or chat_id,
         )
 
-        async def _reply(reply_text: str) -> None:
+        async def _reply(reply_text: str, reply_card: dict | None = None) -> None:
+            if reply_card:
+                try:
+                    await api_client.async_send_card_message(
+                        receive_id=receive_id,
+                        card=reply_card,
+                        receive_id_type=receive_type,
+                    )
+                    return
+                except Exception:
+                    pass
             await api_client.async_send_safe_reply(
                 receive_id=receive_id,
                 receive_id_type=receive_type,
@@ -507,7 +545,15 @@ async def async_setup_provider(
             result = f"Execution failed: {type(err).__name__}"
             _LOGGER.exception("Feishu command execution failed: %s", err)
 
-        await _reply(result)
+        if isinstance(result, dict):
+            await _reply(result.get("text", ""), result.get("card"))
+        else:
+            result_str = str(result)
+            if _should_send_as_card(result_str):
+                card = _build_response_card(result_str)
+                await _reply("", card)
+            else:
+                await _reply(result_str)
 
     ws_client = FeishuWsClient(
         hass=hass,
@@ -572,6 +618,7 @@ PROVIDER_SPEC = ProviderSpec(
 )
 
 
+
 class FeishuCardCallbackView(HomeAssistantView):
     requires_auth = False
     url = "/api/cn_im_hub/feishu/card_callback"
@@ -583,13 +630,8 @@ class FeishuCardCallbackView(HomeAssistantView):
     async def post(self, request: web.Request) -> web.Response:
         try:
             raw = await request.text()
-            _LOGGER.info("Feishu card callback raw body: %s", raw[:2000])
-
-            try:
-                data = json.loads(raw)
-            except json.JSONDecodeError:
-                _LOGGER.warning("Feishu card callback: invalid JSON body")
-                return web.json_response({})
+            _LOGGER.info("Feishu card callback received")
+            data = json.loads(raw)
 
             if data.get("type") == "url_verification":
                 challenge = data.get("challenge", "")
@@ -638,4 +680,4 @@ class FeishuCardCallbackView(HomeAssistantView):
             return web.json_response({"error": "internal error"}, status=400)
 
     async def get(self, request: web.Request) -> web.Response:
-        return web.json_response({"status": "ok", "message": "Feishu card callback endpoint is active"})
+        return web.json_response({"status": "alive"})
