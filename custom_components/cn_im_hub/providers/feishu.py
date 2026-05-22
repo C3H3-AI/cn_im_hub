@@ -33,6 +33,32 @@ from .base import ProviderSpec
 _LOGGER = logging.getLogger(__name__)
 _TOKEN_URL = "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"
 _REPLY_MAX_LENGTH = 1800
+_CARD_TEMPLATE_LENGTH_THRESHOLD = 100
+
+
+def _should_send_as_card(text: str) -> bool:
+    if len(text) > _CARD_TEMPLATE_LENGTH_THRESHOLD:
+        return True
+    if any(keyword in text for keyword in ["打开", "关闭", "控制", "设置", "调整", "开启", "停止"]):
+        return True
+    if any(symbol in text for symbol in ["\n-", "\n•", "\n*", "\n1.", "##", "###"]):
+        return True
+    return False
+
+
+def _build_response_card(text: str) -> dict:
+    return {
+        "header": {
+            "title": {"content": "Claw AI 助手", "tag": "plain_text"},
+            "template": "blue",
+        },
+        "elements": [
+            {
+                "tag": "div",
+                "text": {"content": text[:_REPLY_MAX_LENGTH], "tag": "plain_text"},
+            },
+        ],
+    }
 
 
 def _import_lark() -> tuple[Any, Any]:
@@ -209,6 +235,48 @@ class FeishuApiClient:
                 )
 
         await self._hass.async_add_executor_job(_send)
+
+    async def async_upload_image(self, image_data: bytes) -> str | None:
+        token = await self.async_get_tenant_access_token()
+        form = aiohttp.FormData()
+        form.add_field("image_type", "message")
+        form.add_field("image", image_data, filename="snapshot.jpg", content_type="image/jpeg")
+        async with asyncio.timeout(30):
+            upload_resp = await self._session.post(
+                "https://open.feishu.cn/open-apis/im/v1/images",
+                headers={"Authorization": f"Bearer {token}"},
+                data=form,
+            )
+        upload_data = await _async_read_json(upload_resp)
+        if upload_resp.status != 200 or upload_data.get("code") != 0:
+            _LOGGER.warning("Failed to upload image to Feishu: %s", upload_data.get("msg"))
+            return None
+        return str((upload_data.get("data") or {}).get("image_key") or "")
+
+
+async def async_inject_camera_snapshot(
+    hass: HomeAssistant,
+    card: dict[str, Any],
+    image_data: bytes,
+    ws_client: Any,
+) -> bool:
+    app_id = getattr(ws_client, "_app_id", "")
+    app_secret = getattr(ws_client, "_app_secret", "")
+    if not app_id or not app_secret:
+        return False
+
+    feishu_api = FeishuApiClient(hass, app_id, app_secret)
+    image_key = await feishu_api.async_upload_image(image_data)
+    if not image_key:
+        return False
+
+    elements = card.get("elements", [])
+    elements.insert(
+        next((i for i, e in enumerate(elements) if e.get("tag") == "hr"), 0),
+        {"tag": "img", "img_key": image_key, "alt": {"tag": "plain_text", "content": "摄像头截图"}},
+    )
+    card["elements"] = elements
+    return True
 
 
 class FeishuWsClient:
@@ -442,7 +510,17 @@ async def async_setup_provider(
             display_name=user_id or chat_id,
         )
 
-        async def _reply(reply_text: str) -> None:
+        async def _reply(reply_text: str, reply_card: dict[str, Any] | None = None) -> None:
+            if reply_card:
+                try:
+                    await api_client.async_send_card_message(
+                        receive_id=receive_id,
+                        card=reply_card,
+                        receive_id_type=receive_type,
+                    )
+                    return
+                except Exception as err:
+                    _LOGGER.warning("Card send failed, falling back to text: %s", err)
             await api_client.async_send_safe_reply(
                 receive_id=receive_id,
                 receive_id_type=receive_type,
@@ -469,7 +547,12 @@ async def async_setup_provider(
             result = f"Execution failed: {type(err).__name__}"
             _LOGGER.exception("Feishu command execution failed: %s", err)
 
-        await _reply(result)
+        result_str = str(result)
+        if _should_send_as_card(result_str):
+            card = _build_response_card(result_str)
+            await _reply(result_str, card)
+        else:
+            await _reply(result_str)
 
     ws_client = FeishuWsClient(
         hass=hass,
@@ -545,7 +628,6 @@ class FeishuCardCallbackView(HomeAssistantView):
     async def post(self, request: web.Request) -> web.Response:
         try:
             raw = await request.text()
-            _LOGGER.info("Feishu card callback raw body: %s", raw[:2000])
 
             try:
                 data = json.loads(raw)
@@ -557,6 +639,11 @@ class FeishuCardCallbackView(HomeAssistantView):
                 challenge = data.get("challenge", "")
                 _LOGGER.info("Feishu URL verification: challenge=%s", challenge)
                 return web.json_response({"challenge": challenge})
+
+            callback_token = data.get("token", "")
+            if not callback_token:
+                _LOGGER.warning("Feishu card callback: missing token, rejecting")
+                return web.json_response({"error": "unauthorized"}, status=401)
 
             event = data.get("event", {})
             action = event.get("action", {})
@@ -571,7 +658,6 @@ class FeishuCardCallbackView(HomeAssistantView):
             event_data = {
                 "action": action,
                 "operator": operator,
-                "token": data.get("token", ""),
                 "raw_data": data,
             }
 

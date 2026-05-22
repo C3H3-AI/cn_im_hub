@@ -344,7 +344,18 @@ def _register_services(hass: HomeAssistant) -> None:
             if provider.send_card is None:
                 raise ValueError(f"Provider '{requested}' does not support card sending")
             import json as _json
-            card = _json.loads(card_json)
+            try:
+                card = _json.loads(card_json)
+            except _json.JSONDecodeError as err:
+                raise ValueError(f"Invalid card_json: {err}") from err
+            if camera_entity and requested == "feishu":
+                resolved_camera_entity = await async_resolve_camera_entity(hass, camera_entity)
+                if resolved_camera_entity is not None:
+                    from homeassistant.components.camera import async_get_image
+                    image = await async_get_image(hass, resolved_camera_entity)
+                    if image and image.content:
+                        from .providers.feishu import async_inject_camera_snapshot
+                        await async_inject_camera_snapshot(hass, card, image.content, provider.client)
             await provider.send_card(resolved_target, card, normalized_target_type)
             return
         if approval_id:
