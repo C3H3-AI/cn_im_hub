@@ -41,6 +41,8 @@ Aggregate common Chinese IM platforms into one Home Assistant integration.
   Voice is passed to HA only when the platform already provides transcript text.
 - 飞书卡片标题动态提取 AI 模型名称：当 AI 回复以 `(模型名)回复：` 开头时，卡片标题自动使用模型名  
   Feishu card title dynamically extracts AI model name: when the AI reply starts with `(model-name)Reply:`, the card title shows the model name.
+- 飞书卡片回调可选 token 校验：在飞书子服务配置中填入验证 token 后，仅放行 token 匹配的回调请求  
+  Feishu card callback optional token verification: fill verification token in Feishu subentry config, only allow callbacks with matching token.
 
 ## 安装 / Installation
 
