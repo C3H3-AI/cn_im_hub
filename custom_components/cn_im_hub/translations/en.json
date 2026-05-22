@@ -91,7 +91,8 @@
           "title": "Add Feishu",
           "data": {
             "app_id": "App ID",
-            "app_secret": "App Secret"
+            "app_secret": "App Secret",
+            "feishu_verification_token": "Verification Token (optional)"
           }
         }
       }

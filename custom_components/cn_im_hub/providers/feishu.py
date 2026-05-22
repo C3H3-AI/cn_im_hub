@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import threading
 from collections import OrderedDict
 from collections.abc import Awaitable, Callable
@@ -22,6 +23,7 @@ from ..command import execute_command, parse_command
 from ..const import (
     CONF_FEISHU_APP_ID,
     CONF_FEISHU_APP_SECRET,
+    CONF_FEISHU_VERIFICATION_TOKEN,
     DEFAULT_FEISHU_TARGET_TYPE,
     DOMAIN,
     PROVIDER_FEISHU,
@@ -33,23 +35,22 @@ from .base import ProviderSpec
 _LOGGER = logging.getLogger(__name__)
 _TOKEN_URL = "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"
 _REPLY_MAX_LENGTH = 1800
-_CARD_TEMPLATE_LENGTH_THRESHOLD = 100
+
+_REPLY_PREFIX_RE = re.compile(r"^\(([^)]+)\)\s*(?:回复|Reply)\s*[:：]\s*")
 
 
-def _should_send_as_card(text: str) -> bool:
-    if len(text) > _CARD_TEMPLATE_LENGTH_THRESHOLD:
-        return True
-    if any(keyword in text for keyword in ["打开", "关闭", "控制", "设置", "调整", "开启", "停止"]):
-        return True
-    if any(symbol in text for symbol in ["\n-", "\n•", "\n*", "\n1.", "##", "###"]):
-        return True
-    return False
+def _extract_title_from_text(text: str) -> tuple[str, str]:
+    match = _REPLY_PREFIX_RE.match(text)
+    if match:
+        return match.group(1).strip(), text[match.end():].lstrip()
+    return "Claw AI 助手", text
 
 
-def _build_response_card(text: str) -> dict:
+def _build_response_card(text: str, title: str = "Claw AI 助手") -> dict:
     return {
+        "config": {"wide_screen_mode": True},
         "header": {
-            "title": {"content": "Claw AI 助手", "tag": "plain_text"},
+            "title": {"content": title, "tag": "plain_text"},
             "template": "blue",
         },
         "elements": [
@@ -544,15 +545,24 @@ async def async_setup_provider(
                 agent_id=agent_id,
             )
         except Exception as err:
-            result = f"Execution failed: {type(err).__name__}"
+            result = {"text": f"Execution failed: {type(err).__name__}", "card": None}
             _LOGGER.exception("Feishu command execution failed: %s", err)
 
-        result_str = str(result)
-        if _should_send_as_card(result_str):
-            card = _build_response_card(result_str)
-            await _reply(result_str, card)
+        if isinstance(result, dict):
+            raw_text = result.get("text", "")
+            card_title, card_text = _extract_title_from_text(raw_text)
+            card_from_agent = result.get("card")
+            if card_from_agent and isinstance(card_from_agent, dict):
+                card_from_agent.setdefault("header", {})["title"] = {"content": card_title, "tag": "plain_text"}
+                await _reply(card_text, card_from_agent)
+            else:
+                card = _build_response_card(card_text, card_title)
+                await _reply(card_text, card)
         else:
-            await _reply(result_str)
+            result_str = str(result)
+            card_title, card_text = _extract_title_from_text(result_str)
+            card = _build_response_card(card_text, card_title)
+            await _reply(card_text, card)
 
     ws_client = FeishuWsClient(
         hass=hass,
@@ -604,6 +614,7 @@ def _build_schema(current: dict[str, Any]) -> vol.Schema:
         {
             vol.Required(CONF_FEISHU_APP_ID, default=current.get(CONF_FEISHU_APP_ID, "")): str,
             vol.Required(CONF_FEISHU_APP_SECRET, default=current.get(CONF_FEISHU_APP_SECRET, "")): str,
+            vol.Optional(CONF_FEISHU_VERIFICATION_TOKEN, default=current.get(CONF_FEISHU_VERIFICATION_TOKEN, "")): str,
         }
     )
 
@@ -625,6 +636,15 @@ class FeishuCardCallbackView(HomeAssistantView):
     def __init__(self, hass: HomeAssistant) -> None:
         self._hass = hass
 
+    def _get_verification_token(self) -> str:
+        for entry in self._hass.config_entries.async_entries(DOMAIN):
+            for subentry in entry.subentries.values():
+                if subentry.subentry_type == "feishu":
+                    token = subentry.data.get(CONF_FEISHU_VERIFICATION_TOKEN, "").strip()
+                    if token:
+                        return token
+        return ""
+
     async def post(self, request: web.Request) -> web.Response:
         try:
             raw = await request.text()
@@ -640,10 +660,16 @@ class FeishuCardCallbackView(HomeAssistantView):
                 _LOGGER.info("Feishu URL verification: challenge=%s", challenge)
                 return web.json_response({"challenge": challenge})
 
-            callback_token = data.get("token", "")
-            if not callback_token:
-                _LOGGER.warning("Feishu card callback: missing token, rejecting")
-                return web.json_response({"error": "unauthorized"}, status=401)
+            callback_token = data.get("token", "") or (data.get("header", {}) or {}).get("token", "")
+
+            configured_token = self._get_verification_token()
+            if configured_token:
+                if not callback_token or callback_token != configured_token:
+                    _LOGGER.warning(
+                        "Feishu card callback: token mismatch (got=%s), rejecting",
+                        callback_token[:16] if callback_token else "(empty)",
+                    )
+                    return web.json_response({"error": "unauthorized"}, status=401)
 
             event = data.get("event", {})
             action = event.get("action", {})
