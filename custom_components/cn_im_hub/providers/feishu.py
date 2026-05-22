@@ -47,7 +47,10 @@ def _should_send_as_card(text: str) -> bool:
     return False
 
 
-def _build_response_card(text: str) -> dict:
+_REPLY_PREFIX_RE = re.compile(r"^\(([^)]+)\)\s*(?:回复|Reply)\s*[:：]\s*")
+
+
+def _build_response_card(text: str, title: str = "Claw AI 助手") -> dict:
     """构建漂亮的飞书回复卡片"""
     return {
         "header": {
@@ -555,7 +558,15 @@ async def async_setup_provider(
             if parsed and "card" in parsed:
                 await _reply("", parsed["card"])
             elif _should_send_as_card(result_str):
-                card = _build_response_card(result_str)
+                # 提取 AI 名称前缀作为卡片标题，正文去掉前缀
+                match = _REPLY_PREFIX_RE.match(result_str)
+                if match:
+                    card_title = match.group(1).strip()
+                    card_text = result_str[match.end():].lstrip()
+                else:
+                    card_title = "Claw AI 助手"
+                    card_text = result_str
+                card = _build_response_card(card_text, card_title)
                 await _reply("", card)
             else:
                 await _reply(result_str)
