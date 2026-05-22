@@ -547,12 +547,67 @@ async def async_setup_provider(
             result = f"Execution failed: {type(err).__name__}"
             _LOGGER.exception("Feishu command execution failed: %s", err)
 
-        result_str = str(result)
-        if _should_send_as_card(result_str):
-            card = _build_response_card(result_str)
-            await _reply(result_str, card)
+        # 检查是否是完整的飞书卡片 dict 或 JSON 字符串
+        if isinstance(result, dict):
+            # 如果 result 本身是 dict，检查是不是有 card 字段或 msg_type
+            if "card" in result:
+                await _reply("", result["card"])
+            elif "msg_type" in result and "content" in result:
+                # 可能是完整的消息 payload，提取 card
+                try:
+                    content = result["content"]
+                    if isinstance(content, str):
+                        content = json.loads(content)
+                    if isinstance(content, dict) and "card" in content:
+                        await _reply("", content["card"])
+                    else:
+                        await _reply(str(result))
+                except (JSONDecodeError, TypeError):
+                    await _reply(str(result))
+            else:
+                await _reply(str(result))
         else:
-            await _reply(result_str)
+            result_str = str(result)
+            # 尝试解析为完整的飞书卡片 JSON
+            parsed = _parse_json_from_text(result_str)
+            if parsed:
+                if "card" in parsed:
+                    await _reply("", parsed["card"])
+                elif "msg_type" in parsed and "content" in parsed:
+                    try:
+                        content = parsed["content"]
+                        if isinstance(content, str):
+                            content = json.loads(content)
+                        if isinstance(content, dict) and "card" in content:
+                            await _reply("", content["card"])
+                        else:
+                            # 如果不是完整卡片，继续用我们的逻辑
+                            if _should_send_as_card(result_str):
+                                card = _build_response_card(result_str)
+                                await _reply(result_str, card)
+                            else:
+                                await _reply(result_str)
+                    except (JSONDecodeError, TypeError):
+                        # 解析失败，用默认逻辑
+                        if _should_send_as_card(result_str):
+                            card = _build_response_card(result_str)
+                            await _reply(result_str, card)
+                        else:
+                            await _reply(result_str)
+                else:
+                    # 没有 card 字段，用默认逻辑
+                    if _should_send_as_card(result_str):
+                        card = _build_response_card(result_str)
+                        await _reply(result_str, card)
+                    else:
+                        await _reply(result_str)
+            else:
+                # 不是 JSON，用默认逻辑
+                if _should_send_as_card(result_str):
+                    card = _build_response_card(result_str)
+                    await _reply(result_str, card)
+                else:
+                    await _reply(result_str)
 
     ws_client = FeishuWsClient(
         hass=hass,
