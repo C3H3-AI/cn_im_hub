@@ -92,7 +92,7 @@
           "data": {
             "app_id": "App ID",
             "app_secret": "App Secret",
-            "feishu_verification_token": "验证 Token（可选）"
+            "feishu_verification_token": "飞书回调验证 Token（可选，不填不校验）"
           }
         }
       }
