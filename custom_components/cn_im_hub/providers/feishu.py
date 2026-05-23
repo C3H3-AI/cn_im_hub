@@ -38,8 +38,61 @@ _REPLY_MAX_LENGTH = 1800
 
 _REPLY_PREFIX_RE = re.compile(r"^\(([^)]+)\)\s*(?:回复|Reply)\s*[:：]\s*")
 
+_CONTROL_KEYWORDS = frozenset({
+    "打开", "关闭", "控制", "设置", "调整", "开启", "停止",
+})
+_ALERT_KEYWORDS = frozenset({
+    "报警", "警告", "异常", "故障", "错误", "危险", "注意", "⚠",
+})
+_CONFIRM_RE = re.compile(
+    r"(是否\s*(要|需要|应该)|要不要|请[确认选择决定]|"
+    r"[。！，]?\s*[吗么]$|[？?]\s*$|"
+    r"确认|取消|允许|拒绝)"
+)
+
+
+def _classify_scene(text: str) -> str:
+    if any(kw in text for kw in _ALERT_KEYWORDS):
+        return "alert"
+    if _CONFIRM_RE.search(text):
+        return "confirm"
+    if any(kw in text for kw in _CONTROL_KEYWORDS):
+        return "control"
+    return "default"
+
+
+_CARD_STYLES = {
+    "default": {"template": "blue"},
+    "control": {"template": "green"},
+    "alert": {"template": "red"},
+    "confirm": {"template": "orange"},
+}
+
+
+def _build_confirm_actions() -> list[dict]:
+    return [
+        {
+            "tag": "action",
+            "actions": [
+                {
+                    "tag": "button",
+                    "text": {"content": "确认", "tag": "lark_md"},
+                    "type": "primary",
+                    "value": {"action": "confirm", "toast": "已确认"},
+                },
+                {
+                    "tag": "button",
+                    "text": {"content": "取消", "tag": "lark_md"},
+                    "type": "default",
+                    "value": {"action": "cancel", "toast": "已取消"},
+                },
+            ],
+        }
+    ]
+
 
 def _extract_title_from_text(text: str) -> tuple[str, str]:
+    text = str(text) if not isinstance(text, str) else text
     match = _REPLY_PREFIX_RE.match(text)
     if match:
         return match.group(1).strip(), text[match.end():].lstrip()
@@ -47,18 +100,24 @@ def _extract_title_from_text(text: str) -> tuple[str, str]:
 
 
 def _build_response_card(text: str, title: str = "Claw AI 助手") -> dict:
+    text = str(text) if not isinstance(text, str) else text
+    scene = _classify_scene(text)
+    style = _CARD_STYLES.get(scene, _CARD_STYLES["default"])
+    elements: list[dict] = [
+        {
+            "tag": "div",
+            "text": {"content": text[:_REPLY_MAX_LENGTH], "tag": "plain_text"},
+        },
+    ]
+    if scene == "confirm":
+        elements.extend(_build_confirm_actions())
     return {
         "config": {"wide_screen_mode": True},
         "header": {
             "title": {"content": title, "tag": "plain_text"},
-            "template": "blue",
+            "template": style["template"],
         },
-        "elements": [
-            {
-                "tag": "div",
-                "text": {"content": text[:_REPLY_MAX_LENGTH], "tag": "plain_text"},
-            },
-        ],
+        "elements": elements,
     }
 
 
@@ -549,11 +608,16 @@ async def async_setup_provider(
             _LOGGER.exception("Feishu command execution failed: %s", err)
 
         if isinstance(result, dict):
-            raw_text = result.get("text", "")
+            raw_text = str(result.get("text", ""))
             card_title, card_text = _extract_title_from_text(raw_text)
             card_from_agent = result.get("card")
             if card_from_agent and isinstance(card_from_agent, dict):
-                card_from_agent.setdefault("header", {})["title"] = {"content": card_title, "tag": "plain_text"}
+                header = card_from_agent.get("header")
+                if not isinstance(header, dict):
+                    header = {}
+                    card_from_agent["header"] = header
+                if "title" not in header:
+                    header["title"] = {"content": card_title, "tag": "plain_text"}
                 await _reply(card_text, card_from_agent)
             else:
                 card = _build_response_card(card_text, card_title)
