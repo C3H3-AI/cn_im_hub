@@ -92,7 +92,7 @@
           "data": {
             "app_id": "App ID",
             "app_secret": "App Secret",
-            "feishu_verification_token": "Verification Token (for card callback, optional)"
+            "feishu_verification_token": "Card callback Verification Token (set callback URL in Feishu dev console first; leave empty to skip verification)"
           }
         }
       }
