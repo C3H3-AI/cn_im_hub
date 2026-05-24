@@ -72,56 +72,12 @@ _CARD_STYLES = {
 }
 
 
-def _build_confirm_actions() -> list[dict]:
-    return [
-        {
-            "tag": "action",
-            "actions": [
-                {
-                    "tag": "button",
-                    "text": {"content": "确认", "tag": "lark_md"},
-                    "type": "primary",
-                    "value": {"action": "confirm", "toast": "已确认"},
-                },
-                {
-                    "tag": "button",
-                    "text": {"content": "取消", "tag": "lark_md"},
-                    "type": "default",
-                    "value": {"action": "cancel", "toast": "已取消"},
-                },
-            ],
-        }
-    ]
-
-
 def _extract_title_from_text(text: str) -> tuple[str, str]:
     text = str(text) if not isinstance(text, str) else text
     match = _REPLY_PREFIX_RE.match(text)
     if match:
         return match.group(1).strip(), text[match.end():].lstrip()
     return "Claw AI 助手", text
-
-
-def _build_response_card(text: str, title: str = "Claw AI 助手") -> dict:
-    text = str(text) if not isinstance(text, str) else text
-    scene = _classify_scene(text)
-    style = _CARD_STYLES.get(scene, _CARD_STYLES["default"])
-    elements: list[dict] = [
-        {
-            "tag": "div",
-            "text": {"content": text[:_REPLY_MAX_LENGTH], "tag": "plain_text"},
-        },
-    ]
-    if scene == "confirm":
-        elements.extend(_build_confirm_actions())
-    return {
-        "config": {"wide_screen_mode": True},
-        "header": {
-            "title": {"content": title, "tag": "plain_text"},
-            "template": style["template"],
-        },
-        "elements": elements,
-    }
 
 
 def _import_lark() -> tuple[Any, Any]:
@@ -677,9 +633,6 @@ async def async_setup_provider(
             title=agent_title,
             template=_CARD_STYLES.get(scene, _CARD_STYLES["default"])["template"],
         )
-        if scene == "confirm":
-            body_elements = card.setdefault("body", {}).setdefault("elements", [])
-            body_elements.extend(_build_confirm_actions())
         await api_client.async_send_card_message(
             receive_id=receive_id,
             card=card,
