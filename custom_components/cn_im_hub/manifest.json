@@ -1,22 +1,23 @@
 {
   "domain": "cn_im_hub",
-  "name": "即时通信合集",
+  "name": "即时通信合集 (C3H3-AI Fork)",
   "after_dependencies": [
     "conversation",
     "assist_pipeline",
     "http"
   ],
   "codeowners": [
-    "@ha-china"
+    "@ha-china",
+    "@C3H3-AI"
   ],
   "config_flow": true,
   "dependencies": [
     "conversation"
   ],
-  "documentation": "https://github.com/ha-china/cn_im_hub",
+  "documentation": "https://github.com/ha-china/cn_im_hub (Original) | https://github.com/C3H3-AI/cn_im_hub (Fork)",
   "integration_type": "hub",
   "iot_class": "cloud_push",
-  "issue_tracker": "https://github.com/ha-china/cn_im_hub/issues",
+  "issue_tracker": "https://github.com/C3H3-AI/cn_im_hub/issues",
   "loggers": [
     "custom_components.cn_im_hub",
     "lark_oapi"

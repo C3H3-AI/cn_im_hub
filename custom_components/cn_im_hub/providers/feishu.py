@@ -30,9 +30,7 @@ from ..const import (
     CONF_AGENT_ID,
 )
 from ..known_targets import async_get_tracker
-from ..cimp.frame import parse_reply, to_dict
-from ..cimp.renderer import render_feishu
-from ..cimp.upstream import build_cimp_prompt
+from ..markdown_card import markdown_to_feishu_card
 
 from ..models import ProviderRuntime
 from .base import ProviderSpec
@@ -376,34 +374,6 @@ class FeishuApiClient:
 
         return await self._hass.async_add_executor_job(_send)
 
-    async def async_patch_card(
-        self,
-        *,
-        message_id: str,
-        card: dict[str, Any],
-    ) -> None:
-        """PATCH update a streaming card.
-
-        Args:
-            message_id: The message_id from async_send_streaming_card.
-            card: Updated card JSON (only changed elements needed).
-        """
-        token = await self.async_get_tenant_access_token()
-        content = json.dumps(card, ensure_ascii=False)
-
-        async with asyncio.timeout(10):
-            response = await self._session.patch(
-                f"https://open.feishu.cn/open-apis/im/v1/messages/{message_id}",
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "Content-Type": "application/json",
-                },
-                json={"content": content},
-            )
-        data = await _async_read_json(response)
-        if response.status != 200 or data.get("code") != 0:
-            _LOGGER.warning("Failed to patch card: %s", data.get("msg"))
-
 
 async def async_inject_camera_snapshot(
     hass: HomeAssistant,
@@ -661,22 +631,20 @@ async def async_setup_provider(
             display_name=user_id or chat_id,
         )
 
-        async def _reply(reply_text: str, reply_card: dict[str, Any] | None = None) -> None:
-            if reply_card:
-                try:
-                    await api_client.async_send_card_message(
-                        receive_id=receive_id,
-                        card=reply_card,
-                        receive_id_type=receive_type,
-                    )
-                    return
-                except Exception as err:
-                    _LOGGER.warning("Card send failed, falling back to text: %s", err)
-            await api_client.async_send_safe_reply(
-                receive_id=receive_id,
-                receive_id_type=receive_type,
-                text=reply_text,
+        async def _reply(reply_text: str) -> None:
+            card = markdown_to_feishu_card(
+                reply_text,
+                title="Claw AI 助手",
+                template="red",
             )
+            try:
+                await api_client.async_send_card_message(
+                    receive_id=receive_id,
+                    card=card,
+                    receive_id_type=receive_type,
+                )
+            except Exception as err:
+                _LOGGER.warning("Failed to send error card: %s", err)
 
         try:
             command = parse_command(text)
@@ -693,7 +661,6 @@ async def async_setup_provider(
                 command,
                 conversation_id=f"feishu:{receive_id}",
                 agent_id=agent_id,
-                extra_system_prompt=build_cimp_prompt("feishu", ["text", "card", "image", "buttons"]),
             )
         except Exception as err:
             result = {"text": f"Execution failed: {type(err).__name__}"}
@@ -703,139 +670,21 @@ async def async_setup_provider(
         raw_text = str(result.get("text", "")) if isinstance(result, dict) else str(result)
         agent_title, clean_text = _extract_title_from_text(raw_text)
 
-        # Check for thinking markup (streaming card updates)
-        from ..thinking import ThinkingManager
-        if "[THINKING" in clean_text:
-            # Parse thinking markup
-            import re
-            thinking_match = re.search(
-                r'\[THINKING\s+action="(\w+)"(?:\s+status="([^"]*)")?\]([^\[]*)\[/THINKING\]',
-                clean_text
-            )
-            if thinking_match:
-                action = thinking_match.group(1)
-                status = thinking_match.group(2) or thinking_match.group(3).strip()
-                conversation_id = f"feishu:{receive_id}"
-
-                if action == "start":
-                    # Start new thinking session with streaming card
-                    await ThinkingManager.start(
-                        api_client=api_client,
-                        receive_id=receive_id,
-                        receive_type=receive_type,
-                        conversation_id=conversation_id,
-                        title=agent_title,
-                        initial_status=status or "🤔 正在思考...",
-                    )
-                elif action == "update":
-                    # Update existing thinking session
-                    await ThinkingManager.update_status(
-                        conversation_id=conversation_id,
-                        status=status or "正在处理...",
-                    )
-                elif action == "finish":
-                    # Finish thinking session
-                    await ThinkingManager.finish(
-                        conversation_id=conversation_id,
-                        final_result=None,  # Final result will be in next message
-                    )
-                return  # Thinking markup handled, don't process further
-
-        # Check for interactive markup
-        from ..interactive import has_interactive_markup, process_interactive_reply
-        if has_interactive_markup(clean_text):
-            # Interactive markup path
-            interactive_results = await process_interactive_reply(
-                clean_text,
-                title=agent_title,
-                scene="confirm",  # Interactive blocks usually need confirmation
-            )
-            for item in interactive_results:
-                if item["type"] == "interactive":
-                    card = item["card"]
-                    block = item["block"]
-                    # Inject callback context for buttons
-                    elements = card.get("body", {}).get("elements", [])
-                    for elem in elements:
-                        if elem.get("tag") == "action":
-                            for btn in elem.get("actions", []):
-                                btn_val = btn.get("value", {})
-                                if isinstance(btn_val, dict):
-                                    btn_val["_chat_id"] = receive_id
-                                    btn_val["_receive_type"] = receive_type
-                                    btn_val["_conversation_id"] = f"feishu:{receive_id}"
-                                    btn_val["_interactive_block_id"] = block.block_id
-                    await api_client.async_send_card_message(
-                        receive_id=receive_id, card=card,
-                        receive_id_type=receive_type)
-                elif item["type"] == "text":
-                    await api_client.async_send_text_message(
-                        receive_id=receive_id, text=item["content"],
-                        receive_id_type=receive_type)
-
-        elif clean_text.strip().startswith("{"):
-            # CIMP frame path (for button callbacks and structured AI output)
-            frames = parse_reply(clean_text)
-            for frame in frames:
-                for r_item in render_feishu(frame):
-                    if r_item.msg_type == "interactive":
-                        card = json.loads(r_item.content)
-                        if agent_title != "Claw AI 助手":
-                            card.setdefault("header", {})
-                            card["header"]["title"] = {"content": agent_title, "tag": "plain_text"}
-                        # Inject callback context for buttons (v2 uses body.elements)
-                        elements = card.get("body", {}).get("elements", []) or card.get("elements", [])
-                        for elem in elements:
-                            if elem.get("tag") == "action":
-                                for btn in elem.get("actions", []):
-                                    btn_val = btn.get("value", {})
-                                    if isinstance(btn_val, dict):
-                                        btn_val["_chat_id"] = receive_id
-                                        btn_val["_receive_type"] = receive_type
-                                        btn_val["_conversation_id"] = f"feishu:{receive_id}"
-                        await api_client.async_send_card_message(
-                            receive_id=receive_id, card=card,
-                            receive_id_type=receive_type)
-                    elif r_item.msg_type == "text":
-                        await api_client.async_send_text_message(
-                            receive_id=receive_id, text=r_item.content,
-                            receive_id_type=receive_type)
-        else:
-            # Segment rendering path (for normal AI replies)
-            # Parse [IMAGE:xxx] etc. tags using rich_media module
-            from ..rich_media import parse_reply_segments
-            from ..cimp.renderer import render_segments_to_feishu_card
-
-            segments = parse_reply_segments(clean_text)
-            card_results = await render_segments_to_feishu_card(
-                segments,
-                title=agent_title,
-                hass=hass,
-                api_client=api_client,
-                receive_id=receive_id,
-                receive_type=receive_type,
-            )
-
-            for item in card_results:
-                if item.type == "card":
-                    card = item.data
-                    # Inject callback context for buttons (v2 uses body.elements)
-                    elements = card.get("body", {}).get("elements", [])
-                    for elem in elements:
-                        if elem.get("tag") == "action":
-                            for btn in elem.get("actions", []):
-                                btn_val = btn.get("value", {})
-                                if isinstance(btn_val, dict):
-                                    btn_val["_chat_id"] = receive_id
-                                    btn_val["_receive_type"] = receive_type
-                                    btn_val["_conversation_id"] = f"feishu:{receive_id}"
-                    await api_client.async_send_card_message(
-                        receive_id=receive_id, card=card,
-                        receive_id_type=receive_type)
-                elif item.type == "text":
-                    await api_client.async_send_text_message(
-                        receive_id=receive_id, text=item.data,
-                        receive_id_type=receive_type)
+        # Unified card rendering with scene detection
+        scene = _classify_scene(clean_text)
+        card = markdown_to_feishu_card(
+            clean_text,
+            title=agent_title,
+            template=_CARD_STYLES.get(scene, _CARD_STYLES["default"])["template"],
+        )
+        if scene == "confirm":
+            body_elements = card.setdefault("body", {}).setdefault("elements", [])
+            body_elements.extend(_build_confirm_actions())
+        await api_client.async_send_card_message(
+            receive_id=receive_id,
+            card=card,
+            receive_id_type=receive_type,
+        )
 
     ws_client = FeishuWsClient(
         hass=hass,
@@ -997,7 +846,7 @@ class FeishuCardCallbackView(HomeAssistantView):
                         toast_content = toast_tmpl
 
 
-            # CIMP: button_click callback - feed back to AI
+            # Button click callback - feed back to AI
             chat_id = ""
             conv_id = ""
             if isinstance(action_value, dict):
