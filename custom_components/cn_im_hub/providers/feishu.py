@@ -613,20 +613,61 @@ async def async_setup_provider(
             result = {"text": f"Execution failed: {type(err).__name__}"}
             _LOGGER.exception("Feishu command execution failed: %s", err)
 
-        # CIMP: parse AI reply into frames and render
+        # Extract reply text and agent title
         raw_text = str(result.get("text", "")) if isinstance(result, dict) else str(result)
-        # Strip (AgentName) 回复: prefix that claw_assistant adds via stamp_plain
         agent_title, clean_text = _extract_title_from_text(raw_text)
-        frames = parse_reply(clean_text)
-        for frame in frames:
-            for r_item in render_feishu(frame):
-                if r_item.msg_type == "interactive":
-                    card = json.loads(r_item.content)
-                    # Override card header with agent name if prefix was found
-                    if agent_title != "Claw AI 助手":
-                        card.setdefault("header", {})
-                        card["header"]["title"] = {"content": agent_title, "tag": "plain_text"}
-                    for elem in card.get("elements", []):
+
+        # Check if this is a CIMP JSON frame (e.g., button_click callback)
+        # If so, use CIMP frame rendering; otherwise use Segment rendering
+        if clean_text.strip().startswith("{"):
+            # CIMP frame path (for button callbacks and structured AI output)
+            frames = parse_reply(clean_text)
+            for frame in frames:
+                for r_item in render_feishu(frame):
+                    if r_item.msg_type == "interactive":
+                        card = json.loads(r_item.content)
+                        if agent_title != "Claw AI 助手":
+                            card.setdefault("header", {})
+                            card["header"]["title"] = {"content": agent_title, "tag": "plain_text"}
+                        # Inject callback context for buttons (v2 uses body.elements)
+                        elements = card.get("body", {}).get("elements", []) or card.get("elements", [])
+                        for elem in elements:
+                            if elem.get("tag") == "action":
+                                for btn in elem.get("actions", []):
+                                    btn_val = btn.get("value", {})
+                                    if isinstance(btn_val, dict):
+                                        btn_val["_chat_id"] = receive_id
+                                        btn_val["_receive_type"] = receive_type
+                                        btn_val["_conversation_id"] = f"feishu:{receive_id}"
+                        await api_client.async_send_card_message(
+                            receive_id=receive_id, card=card,
+                            receive_id_type=receive_type)
+                    elif r_item.msg_type == "text":
+                        await api_client.async_send_text_message(
+                            receive_id=receive_id, text=r_item.content,
+                            receive_id_type=receive_type)
+        else:
+            # Segment rendering path (for normal AI replies)
+            # Parse [IMAGE:xxx] etc. tags using rich_media module
+            from ..rich_media import parse_reply_segments
+            from ..cimp.renderer import render_segments_to_feishu_card
+
+            segments = parse_reply_segments(clean_text)
+            card_results = await render_segments_to_feishu_card(
+                segments,
+                title=agent_title,
+                hass=hass,
+                api_client=api_client,
+                receive_id=receive_id,
+                receive_type=receive_type,
+            )
+
+            for item in card_results:
+                if item.type == "card":
+                    card = item.data
+                    # Inject callback context for buttons (v2 uses body.elements)
+                    elements = card.get("body", {}).get("elements", [])
+                    for elem in elements:
                         if elem.get("tag") == "action":
                             for btn in elem.get("actions", []):
                                 btn_val = btn.get("value", {})
@@ -637,17 +678,10 @@ async def async_setup_provider(
                     await api_client.async_send_card_message(
                         receive_id=receive_id, card=card,
                         receive_id_type=receive_type)
-                elif r_item.msg_type == "text":
-                    # Wrap text in a card with agent title when prefix was found
-                    if agent_title != "Claw AI 助手":
-                        card = _build_response_card(r_item.content, title=agent_title)
-                        await api_client.async_send_card_message(
-                            receive_id=receive_id, card=card,
-                            receive_id_type=receive_type)
-                    else:
-                        await api_client.async_send_text_message(
-                            receive_id=receive_id, text=r_item.content,
-                            receive_id_type=receive_type)
+                elif item.type == "text":
+                    await api_client.async_send_text_message(
+                        receive_id=receive_id, text=item.data,
+                        receive_id_type=receive_type)
 
     ws_client = FeishuWsClient(
         hass=hass,
@@ -842,28 +876,42 @@ class FeishuCardCallbackView(HomeAssistantView):
                                     agent_id=_agent_id or None,
                                 )
                                 agent_title_btn, clean_reply = _extract_title_from_text(str(reply))
-                                frames = parse_reply(clean_reply)
                                 api = FeishuApiClient(self._hass, _app_id, _app_secret)
-                                for frame in frames:
-                                    for r_item in render_feishu(frame):
-                                        if r_item.msg_type == "interactive":
-                                            card = json.loads(r_item.content)
-                                            if agent_title_btn != "Claw AI 助手":
-                                                card.setdefault("header", {})
-                                                card["header"]["title"] = {"content": agent_title_btn, "tag": "plain_text"}
-                                            await api.async_send_card_message(
-                                                receive_id=chat_id, card=card,
-                                                receive_id_type="chat_id")
-                                        elif r_item.msg_type == "text":
-                                            if agent_title_btn != "Claw AI 助手":
-                                                card = _build_response_card(r_item.content, title=agent_title_btn)
-                                                await api.async_send_card_message(
-                                                    receive_id=chat_id, card=card,
-                                                    receive_id_type="chat_id")
-                                            else:
-                                                await api.async_send_text_message(
-                                                    receive_id=chat_id, text=r_item.content,
-                                                    receive_id_type="chat_id")
+
+                                # Use Segment rendering for button callback replies
+                                from ..rich_media import parse_reply_segments
+                                from ..cimp.renderer import render_segments_to_feishu_card
+
+                                segments = parse_reply_segments(clean_reply)
+                                card_results = await render_segments_to_feishu_card(
+                                    segments,
+                                    title=agent_title_btn,
+                                    hass=self._hass,
+                                    api_client=api,
+                                    receive_id=chat_id,
+                                    receive_type="chat_id",
+                                )
+
+                                for item in card_results:
+                                    if item.type == "card":
+                                        card = item.data
+                                        # Inject callback context for buttons
+                                        elements = card.get("body", {}).get("elements", [])
+                                        for elem in elements:
+                                            if elem.get("tag") == "action":
+                                                for btn in elem.get("actions", []):
+                                                    btn_val = btn.get("value", {})
+                                                    if isinstance(btn_val, dict):
+                                                        btn_val["_chat_id"] = chat_id
+                                                        btn_val["_receive_type"] = "chat_id"
+                                                        btn_val["_conversation_id"] = conv_id
+                                        await api.async_send_card_message(
+                                            receive_id=chat_id, card=card,
+                                            receive_id_type="chat_id")
+                                    elif item.type == "text":
+                                        await api.async_send_text_message(
+                                            receive_id=chat_id, text=item.data,
+                                            receive_id_type="chat_id")
                             except Exception as cb_err:
                                 _LOGGER.exception("Feishu button_click callback error: %s", cb_err)
 
