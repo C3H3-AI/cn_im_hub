@@ -318,6 +318,92 @@ class FeishuApiClient:
             return None
         return str((upload_data.get("data") or {}).get("image_key") or "")
 
+    async def async_send_streaming_card(
+        self,
+        *,
+        receive_id: str,
+        card: dict[str, Any],
+        receive_id_type: str = DEFAULT_FEISHU_TARGET_TYPE,
+    ) -> str:
+        """Send a streaming card and return message_id for PATCH updates.
+
+        Args:
+            receive_id: Feishu chat_id or open_id.
+            card: Card JSON with streaming_mode enabled.
+            receive_id_type: "chat_id" or "open_id".
+
+        Returns:
+            message_id for subsequent PATCH updates.
+        """
+        # Ensure streaming mode is enabled
+        if "config" not in card:
+            card["config"] = {}
+        card["config"]["streaming_mode"] = True
+
+        content = json.dumps(card, ensure_ascii=False)
+
+        def _send() -> str:
+            lark, _ = _import_lark()
+            client = (
+                lark.Client.builder()
+                .app_id(self._app_id)
+                .app_secret(self._app_secret)
+                .log_level(lark.LogLevel.INFO)
+                .build()
+            )
+            request = (
+                lark.im.v1.CreateMessageRequest.builder()
+                .receive_id_type(receive_id_type)
+                .request_body(
+                    lark.im.v1.CreateMessageRequestBody.builder()
+                    .receive_id(receive_id)
+                    .msg_type("interactive")
+                    .content(content)
+                    .build()
+                )
+                .build()
+            )
+            response = client.im.v1.message.create(request)
+            if not response.success():
+                raise RuntimeError(
+                    f"send streaming card failed code={response.code}, msg={response.msg}"
+                )
+            # Extract message_id from response
+            data = response.data
+            if data and hasattr(data, 'message_id'):
+                return str(data.message_id)
+            return ""
+
+        return await self._hass.async_add_executor_job(_send)
+
+    async def async_patch_card(
+        self,
+        *,
+        message_id: str,
+        card: dict[str, Any],
+    ) -> None:
+        """PATCH update a streaming card.
+
+        Args:
+            message_id: The message_id from async_send_streaming_card.
+            card: Updated card JSON (only changed elements needed).
+        """
+        token = await self.async_get_tenant_access_token()
+        content = json.dumps(card, ensure_ascii=False)
+
+        async with asyncio.timeout(10):
+            response = await self._session.patch(
+                f"https://open.feishu.cn/open-apis/im/v1/messages/{message_id}",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                },
+                json={"content": content},
+            )
+        data = await _async_read_json(response)
+        if response.status != 200 or data.get("code") != 0:
+            _LOGGER.warning("Failed to patch card: %s", data.get("msg"))
+
 
 async def async_inject_camera_snapshot(
     hass: HomeAssistant,
@@ -617,7 +703,45 @@ async def async_setup_provider(
         raw_text = str(result.get("text", "")) if isinstance(result, dict) else str(result)
         agent_title, clean_text = _extract_title_from_text(raw_text)
 
-        # Check for interactive markup first (highest priority)
+        # Check for thinking markup (streaming card updates)
+        from ..thinking import ThinkingManager
+        if "[THINKING" in clean_text:
+            # Parse thinking markup
+            import re
+            thinking_match = re.search(
+                r'\[THINKING\s+action="(\w+)"(?:\s+status="([^"]*)")?\]([^\[]*)\[/THINKING\]',
+                clean_text
+            )
+            if thinking_match:
+                action = thinking_match.group(1)
+                status = thinking_match.group(2) or thinking_match.group(3).strip()
+                conversation_id = f"feishu:{receive_id}"
+
+                if action == "start":
+                    # Start new thinking session with streaming card
+                    await ThinkingManager.start(
+                        api_client=api_client,
+                        receive_id=receive_id,
+                        receive_type=receive_type,
+                        conversation_id=conversation_id,
+                        title=agent_title,
+                        initial_status=status or "🤔 正在思考...",
+                    )
+                elif action == "update":
+                    # Update existing thinking session
+                    await ThinkingManager.update_status(
+                        conversation_id=conversation_id,
+                        status=status or "正在处理...",
+                    )
+                elif action == "finish":
+                    # Finish thinking session
+                    await ThinkingManager.finish(
+                        conversation_id=conversation_id,
+                        final_result=None,  # Final result will be in next message
+                    )
+                return  # Thinking markup handled, don't process further
+
+        # Check for interactive markup
         from ..interactive import has_interactive_markup, process_interactive_reply
         if has_interactive_markup(clean_text):
             # Interactive markup path
