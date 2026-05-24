@@ -617,9 +617,39 @@ async def async_setup_provider(
         raw_text = str(result.get("text", "")) if isinstance(result, dict) else str(result)
         agent_title, clean_text = _extract_title_from_text(raw_text)
 
-        # Check if this is a CIMP JSON frame (e.g., button_click callback)
-        # If so, use CIMP frame rendering; otherwise use Segment rendering
-        if clean_text.strip().startswith("{"):
+        # Check for interactive markup first (highest priority)
+        from ..interactive import has_interactive_markup, process_interactive_reply
+        if has_interactive_markup(clean_text):
+            # Interactive markup path
+            interactive_results = await process_interactive_reply(
+                clean_text,
+                title=agent_title,
+                scene="confirm",  # Interactive blocks usually need confirmation
+            )
+            for item in interactive_results:
+                if item["type"] == "interactive":
+                    card = item["card"]
+                    block = item["block"]
+                    # Inject callback context for buttons
+                    elements = card.get("body", {}).get("elements", [])
+                    for elem in elements:
+                        if elem.get("tag") == "action":
+                            for btn in elem.get("actions", []):
+                                btn_val = btn.get("value", {})
+                                if isinstance(btn_val, dict):
+                                    btn_val["_chat_id"] = receive_id
+                                    btn_val["_receive_type"] = receive_type
+                                    btn_val["_conversation_id"] = f"feishu:{receive_id}"
+                                    btn_val["_interactive_block_id"] = block.block_id
+                    await api_client.async_send_card_message(
+                        receive_id=receive_id, card=card,
+                        receive_id_type=receive_type)
+                elif item["type"] == "text":
+                    await api_client.async_send_text_message(
+                        receive_id=receive_id, text=item["content"],
+                        receive_id_type=receive_type)
+
+        elif clean_text.strip().startswith("{"):
             # CIMP frame path (for button callbacks and structured AI output)
             frames = parse_reply(clean_text)
             for frame in frames:
