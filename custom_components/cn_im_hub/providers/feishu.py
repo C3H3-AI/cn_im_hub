@@ -27,8 +27,13 @@ from ..const import (
     DEFAULT_FEISHU_TARGET_TYPE,
     DOMAIN,
     PROVIDER_FEISHU,
+    CONF_AGENT_ID,
 )
 from ..known_targets import async_get_tracker
+from ..cimp.frame import parse_reply, to_dict
+from ..cimp.renderer import render_feishu
+from ..cimp.upstream import build_cimp_prompt
+
 from ..models import ProviderRuntime
 from .base import ProviderSpec
 
@@ -602,31 +607,47 @@ async def async_setup_provider(
                 command,
                 conversation_id=f"feishu:{receive_id}",
                 agent_id=agent_id,
+                extra_system_prompt=build_cimp_prompt("feishu", ["text", "card", "image", "buttons"]),
             )
         except Exception as err:
-            result = {"text": f"Execution failed: {type(err).__name__}", "card": None}
+            result = {"text": f"Execution failed: {type(err).__name__}"}
             _LOGGER.exception("Feishu command execution failed: %s", err)
 
-        if isinstance(result, dict):
-            raw_text = str(result.get("text", ""))
-            card_title, card_text = _extract_title_from_text(raw_text)
-            card_from_agent = result.get("card")
-            if card_from_agent and isinstance(card_from_agent, dict):
-                header = card_from_agent.get("header")
-                if not isinstance(header, dict):
-                    header = {}
-                    card_from_agent["header"] = header
-                if "title" not in header:
-                    header["title"] = {"content": card_title, "tag": "plain_text"}
-                await _reply(card_text, card_from_agent)
-            else:
-                card = _build_response_card(card_text, card_title)
-                await _reply(card_text, card)
-        else:
-            result_str = str(result)
-            card_title, card_text = _extract_title_from_text(result_str)
-            card = _build_response_card(card_text, card_title)
-            await _reply(card_text, card)
+        # CIMP: parse AI reply into frames and render
+        raw_text = str(result.get("text", "")) if isinstance(result, dict) else str(result)
+        # Strip (AgentName) 回复: prefix that claw_assistant adds via stamp_plain
+        agent_title, clean_text = _extract_title_from_text(raw_text)
+        frames = parse_reply(clean_text)
+        for frame in frames:
+            for r_item in render_feishu(frame):
+                if r_item.msg_type == "interactive":
+                    card = json.loads(r_item.content)
+                    # Override card header with agent name if prefix was found
+                    if agent_title != "Claw AI 助手":
+                        card.setdefault("header", {})
+                        card["header"]["title"] = {"content": agent_title, "tag": "plain_text"}
+                    for elem in card.get("elements", []):
+                        if elem.get("tag") == "action":
+                            for btn in elem.get("actions", []):
+                                btn_val = btn.get("value", {})
+                                if isinstance(btn_val, dict):
+                                    btn_val["_chat_id"] = receive_id
+                                    btn_val["_receive_type"] = receive_type
+                                    btn_val["_conversation_id"] = f"feishu:{receive_id}"
+                    await api_client.async_send_card_message(
+                        receive_id=receive_id, card=card,
+                        receive_id_type=receive_type)
+                elif r_item.msg_type == "text":
+                    # Wrap text in a card with agent title when prefix was found
+                    if agent_title != "Claw AI 助手":
+                        card = _build_response_card(r_item.content, title=agent_title)
+                        await api_client.async_send_card_message(
+                            receive_id=receive_id, card=card,
+                            receive_id_type=receive_type)
+                    else:
+                        await api_client.async_send_text_message(
+                            receive_id=receive_id, text=r_item.content,
+                            receive_id_type=receive_type)
 
     ws_client = FeishuWsClient(
         hass=hass,
@@ -697,8 +718,28 @@ class FeishuCardCallbackView(HomeAssistantView):
     url = "/api/cn_im_hub/feishu/card_callback"
     name = "api:cn_im_hub:feishu:card_callback"
 
-    def __init__(self, hass: HomeAssistant) -> None:
+    def __init__(self, hass: HomeAssistant, app_id: str = "", app_secret: str = "", agent_id: str = "") -> None:
         self._hass = hass
+        self._app_id = app_id
+        self._app_secret = app_secret
+        self._agent_id = agent_id
+
+    def _get_credentials(self) -> tuple[str, str, str]:
+        """Retrieve app_id, app_secret, agent_id from subentry config."""
+        app_id = ""
+        app_secret = ""
+        agent_id = ""
+        for entry in self._hass.config_entries.async_entries(DOMAIN):
+            options = dict(entry.options)
+            agent_id = str(options.get(CONF_AGENT_ID, "")).strip()
+            for subentry in entry.subentries.values():
+                if subentry.subentry_type == "feishu":
+                    data = subentry.data
+                    app_id = str(data.get(CONF_FEISHU_APP_ID, "")).strip()
+                    app_secret = str(data.get(CONF_FEISHU_APP_SECRET, "")).strip()
+                    if app_id and app_secret:
+                        return app_id, app_secret, agent_id
+        return app_id, app_secret, agent_id
 
     def _get_verification_token(self) -> str:
         for entry in self._hass.config_entries.async_entries(DOMAIN):
@@ -766,6 +807,72 @@ class FeishuCardCallbackView(HomeAssistantView):
                         toast_content = toast_tmpl.format(**action_value)
                     except (KeyError, IndexError, ValueError):
                         toast_content = toast_tmpl
+
+
+            # CIMP: button_click callback - feed back to AI
+            chat_id = ""
+            conv_id = ""
+            if isinstance(action_value, dict):
+                chat_id = action_value.get("_chat_id", "") or ""
+                conv_id = action_value.get("_conversation_id", "") or ""
+
+            if chat_id and conv_id:
+                # Get credentials dynamically
+                _app_id, _app_secret, _agent_id = self._get_credentials()
+                if not _app_id or not _app_secret:
+                    _LOGGER.warning("Feishu button_click: no credentials found")
+                else:
+                    button_id = action_value.get("action", "unknown")
+                    click_payload = json.dumps({
+                        "type": "button_click",
+                        "button_id": button_id,
+                        "button_label": action_value.get("toast", button_id),
+                        "conversation_id": conv_id,
+                        "chat_id": chat_id,
+                    }, ensure_ascii=False)
+                    try:
+                        from ..command import execute_command, Command
+                        # Return immediate response to avoid feishu card callback timeout
+                        async def _process_button_click():
+                            try:
+                                reply = await execute_command(
+                                    self._hass,
+                                    Command(kind="conversation", target=click_payload, payload={}),
+                                    conversation_id=conv_id,
+                                    agent_id=_agent_id or None,
+                                )
+                                agent_title_btn, clean_reply = _extract_title_from_text(str(reply))
+                                frames = parse_reply(clean_reply)
+                                api = FeishuApiClient(self._hass, _app_id, _app_secret)
+                                for frame in frames:
+                                    for r_item in render_feishu(frame):
+                                        if r_item.msg_type == "interactive":
+                                            card = json.loads(r_item.content)
+                                            if agent_title_btn != "Claw AI 助手":
+                                                card.setdefault("header", {})
+                                                card["header"]["title"] = {"content": agent_title_btn, "tag": "plain_text"}
+                                            await api.async_send_card_message(
+                                                receive_id=chat_id, card=card,
+                                                receive_id_type="chat_id")
+                                        elif r_item.msg_type == "text":
+                                            if agent_title_btn != "Claw AI 助手":
+                                                card = _build_response_card(r_item.content, title=agent_title_btn)
+                                                await api.async_send_card_message(
+                                                    receive_id=chat_id, card=card,
+                                                    receive_id_type="chat_id")
+                                            else:
+                                                await api.async_send_text_message(
+                                                    receive_id=chat_id, text=r_item.content,
+                                                    receive_id_type="chat_id")
+                            except Exception as cb_err:
+                                _LOGGER.exception("Feishu button_click callback error: %s", cb_err)
+
+                        asyncio.ensure_future(_process_button_click())
+                        return web.json_response({
+                            "toast": {"type": "info", "content": "处理中，请稍候..."}
+                        })
+                    except Exception as cb_err:
+                        _LOGGER.exception("Feishu button_click callback error: %s", cb_err)
 
             return web.json_response({
                 "toast": {"type": "info", "content": toast_content}

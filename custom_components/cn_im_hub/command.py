@@ -37,6 +37,15 @@ async def execute_command(
     """Execute parsed command against Home Assistant."""
     if command.kind == "conversation":
         text = command.target
+        # CIMP: pass JSON frames directly (e.g. button_click)
+        if text.strip().startswith("{"):
+            return await ask_home_assistant(
+                hass,
+                text,
+                conversation_id=conversation_id,
+                agent_id=agent_id,
+                extra_system_prompt=extra_system_prompt,
+            )
         for prefix, name in _IM_PREFIXES.items():
             if conversation_id.startswith(prefix):
                 text = f"[IM:{name}|{conversation_id}] {text}"

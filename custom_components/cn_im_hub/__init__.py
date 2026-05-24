@@ -167,7 +167,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await async_setup_tmp_cleanup(hass)
 
     from .providers.feishu import FeishuCardCallbackView
-    hass.http.register_view(FeishuCardCallbackView(hass))
+    hass.http.register_view(FeishuCardCallbackView(hass, app_id="", app_secret="", agent_id=agent_id))
     _LOGGER.info("Feishu card callback view registered at /api/cn_im_hub/feishu/card_callback")
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
