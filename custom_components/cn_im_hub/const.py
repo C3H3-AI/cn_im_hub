@@ -12,40 +12,47 @@ PROVIDER_QQ: Final = "qq"
 PROVIDER_DINGTALK: Final = "dingtalk"
 PROVIDER_WECHAT: Final = "wechat"
 PROVIDER_XIAOYI: Final = "xiaoyi"
-PROVIDERS: Final = (PROVIDER_WECOM, PROVIDER_WECHAT, PROVIDER_QQ, PROVIDER_FEISHU, PROVIDER_DINGTALK, PROVIDER_XIAOYI)
+PROVIDER_CUSTOM: Final = "custom"
+PROVIDERS: Final = (PROVIDER_WECOM, PROVIDER_WECHAT, PROVIDER_QQ, PROVIDER_FEISHU, PROVIDER_DINGTALK, PROVIDER_XIAOYI, PROVIDER_CUSTOM)
 
 CONF_ENABLED_PROVIDERS: Final = "enabled_providers"
 CONF_PROVIDERS: Final = "providers"
 CONF_AGENT_ID: Final = "agent_id"
 
-CONF_FEISHU_APP_ID: Final = "app_id"
-CONF_FEISHU_APP_SECRET: Final = "app_secret"
-
-CONF_WECOM_BOT_ID: Final = "bot_id"
-CONF_WECOM_SECRET: Final = "secret"
-
 CONF_QQ_APP_ID: Final = "qq_app_id"
 CONF_QQ_CLIENT_SECRET: Final = "qq_client_secret"
-
-CONF_DINGTALK_CLIENT_ID: Final = "dingtalk_client_id"
-CONF_DINGTALK_CLIENT_SECRET: Final = "dingtalk_client_secret"
+QQ_TOKEN_URL: Final = "https://bots.qq.com/app/getAppAccessToken"
+QQ_API_BASE: Final = "https://api.sgroup.qq.com"
 
 CONF_WECHAT_TOKEN: Final = "wechat_token"
 CONF_WECHAT_ACCOUNT_ID: Final = "wechat_account_id"
 CONF_WECHAT_USER_ID: Final = "wechat_user_id"
 CONF_WECHAT_BASE_URL: Final = "wechat_base_url"
 CONF_WECHAT_SYNC_BUF: Final = "wechat_sync_buf"
+WECHAT_DEFAULT_BASE_URL: Final = "https://ilinkai.weixin.qq.com"
+WECHAT_CDN_BASE_URL: Final = "https://c2cwxappimg.weixin.qq.com"
+
+CONF_FEISHU_APP_ID: Final = "app_id"
+CONF_FEISHU_APP_SECRET: Final = "app_secret"
+FEISHU_TOKEN_URL: Final = "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"
+
+CONF_WECOM_BOT_ID: Final = "bot_id"
+CONF_WECOM_SECRET: Final = "secret"
+WECOM_WS_URL: Final = "wss://openws.work.weixin.qq.com"
+
+CONF_DINGTALK_CLIENT_ID: Final = "dingtalk_client_id"
+CONF_DINGTALK_CLIENT_SECRET: Final = "dingtalk_client_secret"
+DINGTALK_OAUTH_URL: Final = "https://api.dingtalk.com/v1.0/oauth2/accessToken"
+DINGTALK_API_BASE: Final = "https://api.dingtalk.com"
+DINGTALK_OAPI_BASE: Final = "https://oapi.dingtalk.com"
 
 CONF_XIAOYI_AK: Final = "xiaoyi_ak"
 CONF_XIAOYI_SK: Final = "xiaoyi_sk"
 CONF_XIAOYI_AGENT_ID: Final = "xiaoyi_agent_id"
 CONF_XIAOYI_WS_URL_1: Final = "xiaoyi_ws_url_1"
 CONF_XIAOYI_WS_URL_2: Final = "xiaoyi_ws_url_2"
-
 XIAOYI_DEFAULT_WS_URL_1: Final = "wss://hag.cloud.huawei.com/openclaw/v1/ws/link"
 XIAOYI_DEFAULT_WS_URL_2: Final = "wss://116.63.174.231/openclaw/v1/ws/link"
-
-WECHAT_DEFAULT_BASE_URL: Final = "https://ilinkai.weixin.qq.com"
 
 SERVICE_SEND_MESSAGE: Final = "send_message"
 

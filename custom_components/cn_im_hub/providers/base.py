@@ -19,7 +19,6 @@ class ProviderSpec:
     """Self-contained provider definition."""
 
     key: str
-    title: str
     schema_builder: Callable[[dict[str, Any]], vol.Schema]
     validate_config: Callable[[HomeAssistant, dict[str, Any]], Awaitable[None]]
     setup_provider: Callable[..., Awaitable[ProviderRuntime]]

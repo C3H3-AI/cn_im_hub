@@ -2,8 +2,8 @@
   "config": {
     "step": {
       "user": {
-        "title": "IM Collection",
-        "description": "Choose one global conversation agent. Providers are added later from this integration page."
+        "title": "CN IM Hub",
+        "description": "Choose one global conversation agent. Channels are added later from this integration page."
       }
     },
     "error": {
@@ -16,7 +16,7 @@
     "step": {
       "init": {
         "title": "Set Global Agent",
-        "description": "All providers use this single conversation agent."
+        "description": "All channels use this single conversation agent."
       }
     },
     "error": {
@@ -26,7 +26,7 @@
   "services": {
     "send_message": {
       "name": "Send Message",
-      "description": "Send a message via the selected IM provider.",
+      "description": "Send a message via the selected IM channel.",
       "fields": {
         "wechat_account_id": {
           "name": "WeChat Account",
@@ -34,11 +34,11 @@
         },
         "camera_entity": {
           "name": "Camera Entity",
-          "description": "Capture a snapshot from this camera and send it as an image. Currently supported by WeChat, WeCom, Feishu, and QQ."
+          "description": "Capture a snapshot from this camera and send it as an image. Supported by WeChat, WeCom, Feishu, and QQ channels."
         },
         "tts_text": {
           "name": "TTS Text",
-          "description": "Text to synthesize and send as voice when supported by the provider."
+          "description": "Text to synthesize and send as voice when supported by the channel."
         },
         "file_path": {
           "name": "File Path",
@@ -81,7 +81,7 @@
   },
   "config_subentries": {
     "feishu": {
-      "entry_type": "Feishu Service",
+      "channel_title": "Feishu Channel",
       "initiate_flow": {
         "user": "Add Feishu",
         "reconfigure": "Feishu Settings"
@@ -89,15 +89,25 @@
       "step": {
         "set_options": {
           "title": "Add Feishu",
+          "description": "Go to [Feishu Open Platform](https://open.feishu.cn/app) to create an app and get App ID and App Secret.\n\nAfter entering, click Submit and say hello in the channel.",
           "data": {
             "app_id": "App ID",
-            "app_secret": "App Secret"
+            "app_secret": "App Secret",
+            "feishu_show_live_progress": "Show Thinking And Tool Progress"
           }
         }
+      },
+      "abort": {
+        "already_configured": "Feishu channel is already configured.",
+        "reconfigure_successful": "Feishu channel updated successfully.",
+        "max_instances_reached": "Maximum instances reached (3)."
+      },
+      "error": {
+        "cannot_connect": "Failed to validate Feishu config."
       }
     },
     "wecom": {
-      "entry_type": "WeCom Service",
+      "channel_title": "WeCom Channel",
       "initiate_flow": {
         "user": "Add WeCom",
         "reconfigure": "WeCom Settings"
@@ -105,15 +115,25 @@
       "step": {
         "set_options": {
           "title": "Add WeCom",
+          "description": "Go to [WeCom Admin Console](https://work.weixin.qq.com/wework_admin/frame#apps) to create an app and get Bot ID and Secret.\n\nAfter entering, click Submit and say hello in the channel.",
           "data": {
             "bot_id": "Bot ID",
-            "secret": "Secret"
+            "secret": "Secret",
+            "wecom_show_live_progress": "Show Thinking And Tool Progress"
           }
         }
+      },
+      "abort": {
+        "already_configured": "WeCom channel is already configured.",
+        "reconfigure_successful": "WeCom channel updated successfully.",
+        "max_instances_reached": "Maximum instances reached (3)."
+      },
+      "error": {
+        "cannot_connect": "Failed to validate WeCom config."
       }
     },
     "qq": {
-      "entry_type": "QQ Service",
+      "channel_title": "QQ Channel",
       "initiate_flow": {
         "user": "Add QQ",
         "reconfigure": "QQ Settings"
@@ -121,16 +141,25 @@
       "step": {
         "set_options": {
           "title": "Add QQ",
+          "description": "Go to [QQ Open Platform](https://q.qq.com/qqbot/openclaw/index.html) to create a bot and get App ID and App Secret.\n\nAfter entering, click Submit and say hello in the channel.",
           "data": {
             "qq_app_id": "App ID",
             "qq_client_secret": "App Secret",
             "qq_show_live_progress": "Show Thinking And Tool Progress"
           }
         }
+      },
+      "abort": {
+        "already_configured": "QQ channel is already configured.",
+        "reconfigure_successful": "QQ channel updated successfully.",
+        "max_instances_reached": "Maximum instances reached (3)."
+      },
+      "error": {
+        "cannot_connect": "Failed to validate QQ config."
       }
     },
     "dingtalk": {
-      "entry_type": "DingTalk Service",
+      "channel_title": "DingTalk Channel",
       "initiate_flow": {
         "user": "Add DingTalk",
         "reconfigure": "DingTalk Settings"
@@ -138,27 +167,53 @@
       "step": {
         "set_options": {
           "title": "Add DingTalk",
+          "description": "Go to [DingTalk Open Platform](https://open-dev.dingtalk.com/fe/app) to create an app and get Client ID and Client Secret.\n\nAfter entering, click Submit and say hello in the channel.",
           "data": {
             "dingtalk_client_id": "Client ID",
-            "dingtalk_client_secret": "Client Secret"
+            "dingtalk_client_secret": "Client Secret",
+            "dingtalk_show_live_progress": "Show Thinking And Tool Progress"
           }
         }
+      },
+      "abort": {
+        "already_configured": "DingTalk channel is already configured.",
+        "reconfigure_successful": "DingTalk channel updated successfully.",
+        "max_instances_reached": "Maximum instances reached (3)."
+      },
+      "error": {
+        "cannot_connect": "Failed to validate DingTalk config."
       }
     },
     "wechat": {
-      "entry_type": "WeChat",
+      "channel_title": "WeChat Channel",
       "initiate_flow": {
-        "user": "Add WeChat"
+        "user": "Add WeChat",
+        "reconfigure": "WeChat Settings"
       },
       "step": {
+        "reconfigure": {
+          "title": "WeChat Settings",
+          "data": {
+            "wechat_show_live_progress": "Show Thinking And Tool Progress"
+          }
+        },
         "auth_wait": {
           "title": "Waiting for WeChat Login",
           "description": "Scan the QR in WeChat and confirm on the phone. After confirmation, click Submit.\n\n{qr_markdown}\n\nQR URL: {qr_url}"
         }
+      },
+      "abort": {
+        "already_configured": "WeChat channel is already configured.",
+        "reconfigure_successful": "WeChat channel updated successfully.",
+        "max_instances_reached": "Maximum instances reached (3)."
+      },
+      "error": {
+        "cannot_connect": "Failed to validate WeChat config.",
+        "auth_not_confirmed": "QR login not confirmed yet."
       }
     },
     "xiaoyi": {
-      "entry_type": "XiaoYi",
+      "channel_title": "XiaoYi Channel",
       "initiate_flow": {
         "user": "Add XiaoYi",
         "reconfigure": "XiaoYi Settings"
@@ -166,12 +221,46 @@
       "step": {
         "set_options": {
           "title": "Add XiaoYi",
+          "description": "Go to [Huawei Developer Alliance](https://developer.huawei.com/consumer/cn/service/josp/agc/index.html) to get Access Key and Secret Key.\n\nAfter entering, click Submit and say hello in the channel.",
           "data": {
             "xiaoyi_ak": "Access Key",
             "xiaoyi_sk": "Secret Key",
-            "xiaoyi_agent_id": "XiaoYi Agent ID"
+            "xiaoyi_agent_id": "XiaoYi Agent ID",
+            "xiaoyi_show_live_progress": "Show Thinking And Tool Progress"
           }
         }
+      },
+      "abort": {
+        "already_configured": "XiaoYi channel is already configured.",
+        "reconfigure_successful": "XiaoYi channel updated successfully.",
+        "max_instances_reached": "Maximum instances reached (3)."
+      },
+      "error": {
+        "cannot_connect": "Failed to validate XiaoYi config."
+      }
+    },
+    "custom": {
+      "channel_title": "Custom Channel",
+      "initiate_flow": {
+        "user": "Add Custom Channel",
+        "reconfigure": "Custom Channel Settings"
+      },
+      "step": {
+        "set_options": {
+          "title": "Add Custom Channel",
+          "description": "Configure custom IM channels (e.g., Telegram, Discord) via YAML.\n\nRefer to the example configuration and fill in your channel details.",
+          "data": {
+            "custom_yaml": "YAML Configuration"
+          }
+        }
+      },
+      "abort": {
+        "already_configured": "Custom channel is already configured.",
+        "reconfigure_successful": "Custom channel updated successfully.",
+        "max_instances_reached": "Maximum instances reached (3)."
+      },
+      "error": {
+        "cannot_connect": "Failed to validate YAML config."
       }
     }
   }
