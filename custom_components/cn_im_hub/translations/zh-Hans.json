@@ -88,7 +88,7 @@
       "step": {
         "set_options": {
           "title": "添加飞书",
-          "description": "请前往 [飞书开放平台](https://open.feishu.cn/app) 创建应用，获取 App ID 和 App Secret。\n\n输入之后点击提交，请主动在通道端打招呼。",
+          "description": "请前往 飞书开放平台 创建应用，获取 App ID 和 App Secret。\n\n输入之后点击提交，请主动在通道端打招呼。",
           "data": {
             "app_id": "App ID",
             "app_secret": "App Secret",
@@ -114,7 +114,7 @@
       "step": {
         "set_options": {
           "title": "添加企微",
-          "description": "请前往 [企业微信管理后台](https://work.weixin.qq.com/wework_admin/frame#apps) 创建应用，获取 Bot ID 和 Secret。\n\n输入之后点击提交，请主动在通道端打招呼。",
+          "description": "请前往 企业微信管理后台 创建应用，获取 Bot ID 和 Secret。\n\n输入之后点击提交，请主动在通道端打招呼。",
           "data": {
             "bot_id": "Bot ID",
             "secret": "Secret",
@@ -140,7 +140,7 @@
       "step": {
         "set_options": {
           "title": "添加 QQ",
-          "description": "请前往 [QQ 开放平台](https://q.qq.com/qqbot/openclaw/index.html) 创建机器人，获取 App ID 和 App Secret。\n\n输入之后点击提交，请主动在通道端打招呼。",
+          "description": "请前往 QQ 开放平台 创建机器人，获取 App ID 和 App Secret。\n\n输入之后点击提交，请主动在通道端打招呼。",
           "data": {
             "qq_app_id": "App ID",
             "qq_client_secret": "App Secret",
@@ -166,7 +166,7 @@
       "step": {
         "set_options": {
           "title": "添加钉钉",
-          "description": "请前往 [钉钉开放平台](https://open-dev.dingtalk.com/fe/app) 创建应用，获取 Client ID 和 Client Secret。\n\n输入之后点击提交，请主动在通道端打招呼。",
+          "description": "请前往 钉钉开放平台 创建应用，获取 Client ID 和 Client Secret。\n\n输入之后点击提交，请主动在通道端打招呼。",
           "data": {
             "dingtalk_client_id": "Client ID",
             "dingtalk_client_secret": "Client Secret",
@@ -220,7 +220,7 @@
       "step": {
         "set_options": {
           "title": "添加小艺",
-          "description": "请前往 [华为开发者联盟](https://developer.huawei.com/consumer/cn/service/josp/agc/index.html) 获取 Access Key 和 Secret Key。\n\n输入之后点击提交，请主动在通道端打招呼。",
+          "description": "请前往 华为开发者联盟 获取 Access Key 和 Secret Key。\n\n输入之后点击提交，请主动在通道端打招呼。",
           "data": {
             "xiaoyi_ak": "Access Key",
             "xiaoyi_sk": "Secret Key",

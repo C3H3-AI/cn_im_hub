@@ -88,7 +88,7 @@
       "step": {
         "set_options": {
           "title": "Add Feishu",
-          "description": "Go to [Feishu Open Platform](https://open.feishu.cn/app) to create an app and get App ID and App Secret.\n\nAfter entering, click Submit and say hello in the channel.",
+          "description": "Go to Feishu Open Platform to create an app and get App ID and App Secret.\n\nAfter entering, click Submit and say hello in the channel.",
           "data": {
             "app_id": "App ID",
             "app_secret": "App Secret",
@@ -114,7 +114,7 @@
       "step": {
         "set_options": {
           "title": "Add WeCom",
-          "description": "Go to [WeCom Admin Console](https://work.weixin.qq.com/wework_admin/frame#apps) to create an app and get Bot ID and Secret.\n\nAfter entering, click Submit and say hello in the channel.",
+          "description": "Go to WeCom Admin Console to create an app and get Bot ID and Secret.\n\nAfter entering, click Submit and say hello in the channel.",
           "data": {
             "bot_id": "Bot ID",
             "secret": "Secret",
@@ -140,7 +140,7 @@
       "step": {
         "set_options": {
           "title": "Add QQ",
-          "description": "Go to [QQ Open Platform](https://q.qq.com/qqbot/openclaw/index.html) to create a bot and get App ID and App Secret.\n\nAfter entering, click Submit and say hello in the channel.",
+          "description": "Go to QQ Open Platform to create a bot and get App ID and App Secret.\n\nAfter entering, click Submit and say hello in the channel.",
           "data": {
             "qq_app_id": "App ID",
             "qq_client_secret": "App Secret",
@@ -166,7 +166,7 @@
       "step": {
         "set_options": {
           "title": "Add DingTalk",
-          "description": "Go to [DingTalk Open Platform](https://open-dev.dingtalk.com/fe/app) to create an app and get Client ID and Client Secret.\n\nAfter entering, click Submit and say hello in the channel.",
+          "description": "Go to DingTalk Open Platform to create an app and get Client ID and Client Secret.\n\nAfter entering, click Submit and say hello in the channel.",
           "data": {
             "dingtalk_client_id": "Client ID",
             "dingtalk_client_secret": "Client Secret",
@@ -220,7 +220,7 @@
       "step": {
         "set_options": {
           "title": "Add XiaoYi",
-          "description": "Go to [Huawei Developer Alliance](https://developer.huawei.com/consumer/cn/service/josp/agc/index.html) to get Access Key and Secret Key.\n\nAfter entering, click Submit and say hello in the channel.",
+          "description": "Go to Huawei Developer Alliance to get Access Key and Secret Key.\n\nAfter entering, click Submit and say hello in the channel.",
           "data": {
             "xiaoyi_ak": "Access Key",
             "xiaoyi_sk": "Secret Key",
