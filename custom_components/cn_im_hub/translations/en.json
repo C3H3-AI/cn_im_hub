@@ -103,7 +103,8 @@
       },
       "error": {
         "cannot_connect": "Failed to validate Feishu config."
-      }
+      },
+      "entry_type": "Feishu"
     },
     "wecom": {
       "initiate_flow": {
@@ -128,7 +129,8 @@
       },
       "error": {
         "cannot_connect": "Failed to validate WeCom config."
-      }
+      },
+      "entry_type": "WeCom"
     },
     "qq": {
       "initiate_flow": {
@@ -153,7 +155,8 @@
       },
       "error": {
         "cannot_connect": "Failed to validate QQ config."
-      }
+      },
+      "entry_type": "QQ"
     },
     "dingtalk": {
       "initiate_flow": {
@@ -178,7 +181,8 @@
       },
       "error": {
         "cannot_connect": "Failed to validate DingTalk config."
-      }
+      },
+      "entry_type": "DingTalk"
     },
     "wechat": {
       "initiate_flow": {
@@ -205,7 +209,8 @@
       "error": {
         "cannot_connect": "Failed to validate WeChat config.",
         "auth_not_confirmed": "QR login not confirmed yet."
-      }
+      },
+      "entry_type": "WeChat"
     },
     "xiaoyi": {
       "initiate_flow": {
@@ -231,7 +236,8 @@
       },
       "error": {
         "cannot_connect": "Failed to validate XiaoYi config."
-      }
+      },
+      "entry_type": "XiaoYi"
     },
     "custom": {
       "initiate_flow": {
@@ -254,7 +260,8 @@
       },
       "error": {
         "cannot_connect": "Failed to validate YAML config."
-      }
+      },
+      "entry_type": "Custom"
     }
   }
 }

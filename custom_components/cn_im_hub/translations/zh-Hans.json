@@ -103,7 +103,8 @@
       },
       "error": {
         "cannot_connect": "飞书配置验证失败。"
-      }
+      },
+      "entry_type": "飞书"
     },
     "wecom": {
       "initiate_flow": {
@@ -128,7 +129,8 @@
       },
       "error": {
         "cannot_connect": "企微配置验证失败。"
-      }
+      },
+      "entry_type": "企业微信"
     },
     "qq": {
       "initiate_flow": {
@@ -153,7 +155,8 @@
       },
       "error": {
         "cannot_connect": "QQ 配置验证失败。"
-      }
+      },
+      "entry_type": "QQ"
     },
     "dingtalk": {
       "initiate_flow": {
@@ -178,7 +181,8 @@
       },
       "error": {
         "cannot_connect": "钉钉配置验证失败。"
-      }
+      },
+      "entry_type": "钉钉"
     },
     "wechat": {
       "initiate_flow": {
@@ -205,7 +209,8 @@
       "error": {
         "cannot_connect": "微信配置验证失败。",
         "auth_not_confirmed": "扫码登录尚未确认。"
-      }
+      },
+      "entry_type": "微信"
     },
     "xiaoyi": {
       "initiate_flow": {
@@ -231,7 +236,8 @@
       },
       "error": {
         "cannot_connect": "小艺配置验证失败。"
-      }
+      },
+      "entry_type": "小艺"
     },
     "custom": {
       "initiate_flow": {
@@ -254,7 +260,8 @@
       },
       "error": {
         "cannot_connect": "配置验证失败。"
-      }
+      },
+      "entry_type": "自定义"
     }
   }
 }
