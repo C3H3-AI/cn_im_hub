@@ -81,7 +81,6 @@
   },
   "config_subentries": {
     "feishu": {
-      "channel_title": "Feishu Channel",
       "initiate_flow": {
         "user": "Add Feishu",
         "reconfigure": "Feishu Settings"
@@ -107,7 +106,6 @@
       }
     },
     "wecom": {
-      "channel_title": "WeCom Channel",
       "initiate_flow": {
         "user": "Add WeCom",
         "reconfigure": "WeCom Settings"
@@ -133,7 +131,6 @@
       }
     },
     "qq": {
-      "channel_title": "QQ Channel",
       "initiate_flow": {
         "user": "Add QQ",
         "reconfigure": "QQ Settings"
@@ -159,7 +156,6 @@
       }
     },
     "dingtalk": {
-      "channel_title": "DingTalk Channel",
       "initiate_flow": {
         "user": "Add DingTalk",
         "reconfigure": "DingTalk Settings"
@@ -185,7 +181,6 @@
       }
     },
     "wechat": {
-      "channel_title": "WeChat Channel",
       "initiate_flow": {
         "user": "Add WeChat",
         "reconfigure": "WeChat Settings"
@@ -213,7 +208,6 @@
       }
     },
     "xiaoyi": {
-      "channel_title": "XiaoYi Channel",
       "initiate_flow": {
         "user": "Add XiaoYi",
         "reconfigure": "XiaoYi Settings"
@@ -240,7 +234,6 @@
       }
     },
     "custom": {
-      "channel_title": "Custom Channel",
       "initiate_flow": {
         "user": "Add Custom Channel",
         "reconfigure": "Custom Channel Settings"

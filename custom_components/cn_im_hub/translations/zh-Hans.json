@@ -81,7 +81,6 @@
   },
   "config_subentries": {
     "feishu": {
-      "channel_title": "飞书通道",
       "initiate_flow": {
         "user": "添加飞书",
         "reconfigure": "飞书设置"
@@ -107,7 +106,6 @@
       }
     },
     "wecom": {
-      "channel_title": "企微通道",
       "initiate_flow": {
         "user": "添加企微",
         "reconfigure": "企微设置"
@@ -133,7 +131,6 @@
       }
     },
     "qq": {
-      "channel_title": "QQ通道",
       "initiate_flow": {
         "user": "添加 QQ",
         "reconfigure": "QQ 设置"
@@ -159,7 +156,6 @@
       }
     },
     "dingtalk": {
-      "channel_title": "钉钉通道",
       "initiate_flow": {
         "user": "添加钉钉",
         "reconfigure": "钉钉设置"
@@ -185,7 +181,6 @@
       }
     },
     "wechat": {
-      "channel_title": "微信通道",
       "initiate_flow": {
         "user": "添加微信",
         "reconfigure": "微信设置"
@@ -213,7 +208,6 @@
       }
     },
     "xiaoyi": {
-      "channel_title": "小艺通道",
       "initiate_flow": {
         "user": "添加小艺",
         "reconfigure": "小艺设置"
@@ -240,7 +234,6 @@
       }
     },
     "custom": {
-      "channel_title": "自定义通道",
       "initiate_flow": {
         "user": "添加自定义通道",
         "reconfigure": "自定义通道设置"
