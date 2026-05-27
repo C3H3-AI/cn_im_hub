@@ -20,7 +20,7 @@ import segno
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from ..const import WECHAT_DEFAULT_BASE_URL
+from ...const import WECHAT_CDN_BASE_URL, WECHAT_DEFAULT_BASE_URL
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ _DEFAULT_LONG_POLL_TIMEOUT_MS = 35_000
 _DEFAULT_API_TIMEOUT_MS = 15_000
 _DEFAULT_ILINK_BOT_TYPE = "3"
 SESSION_EXPIRED_ERRCODE = -14
-_WECHAT_CDN_BASE_URL = "https://c2cwxappimg.weixin.qq.com"
+_WECHAT_CDN_BASE_URL = WECHAT_CDN_BASE_URL
 
 
 @dataclass(slots=True)
@@ -488,6 +488,53 @@ async def async_send_weixin_file(
             "media": _build_cdn_media(uploaded),
             "file_name": file_name,
             "len": str(uploaded.plaintext_size),
+        },
+    }
+    return await _async_send_message_with_item(
+        session,
+        base_url=base_url,
+        token=token,
+        to_user_id=to_user_id,
+        context_token=context_token,
+        item=item,
+    )
+
+
+async def async_send_weixin_voice(
+    hass: HomeAssistant,
+    *,
+    base_url: str,
+    token: str,
+    to_user_id: str,
+    context_token: str,
+    silk_bytes: bytes,
+    duration_ms: int,
+) -> str:
+    """Send a voice message (SILK format)."""
+    if not silk_bytes:
+        raise ValueError("Weixin voice data is empty")
+    session = async_get_clientsession(hass)
+    uploaded = await _async_upload_to_wechat_cdn(
+        session,
+        base_url=base_url,
+        token=token,
+        to_user_id=to_user_id,
+        media_bytes=silk_bytes,
+        media_type=4,
+    )
+    cdn_media = _build_cdn_media(uploaded)
+    cdn_media["full_url"] = (
+        f"{_WECHAT_CDN_BASE_URL}/download"
+        f"?encrypted_query_param={quote(uploaded.encrypt_query_param, safe='')}"
+    )
+    item = {
+        "type": 3,
+        "voice_item": {
+            "media": cdn_media,
+            "encode_type": 6,
+            "bits_per_sample": 16,
+            "sample_rate": 16000,
+            "playtime": duration_ms,
         },
     }
     return await _async_send_message_with_item(

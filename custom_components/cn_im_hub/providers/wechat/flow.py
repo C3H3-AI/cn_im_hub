@@ -9,12 +9,14 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigSubentryFlow, SubentryFlowResult
 from homeassistant.helpers.storage import Store
 
-from ..const import CONF_WECHAT_ACCOUNT_ID, CONF_WECHAT_BASE_URL, CONF_WECHAT_TOKEN, CONF_WECHAT_USER_ID, WECHAT_DEFAULT_BASE_URL
-from .wechat_auth import async_start_weixin_login, async_wait_weixin_login
+from ...const import CONF_WECHAT_ACCOUNT_ID, CONF_WECHAT_BASE_URL, CONF_WECHAT_TOKEN, CONF_WECHAT_USER_ID, PROVIDER_WECHAT, WECHAT_DEFAULT_BASE_URL
+from ...provider_flow import _load_channel_titles
+from .auth import async_start_weixin_login, async_wait_weixin_login
 
 _LOGGER = logging.getLogger(__name__)
 _ACCOUNT_INDEX_STORE_VERSION = 1
 _ACCOUNT_INDEX_STORE_KEY = "cn_im_hub_wechat_accounts"
+_CONF_WECHAT_SHOW_LIVE_PROGRESS = "wechat_show_live_progress"
 
 
 class WeixinProviderSubentryFlow(ConfigSubentryFlow):
@@ -68,18 +70,49 @@ class WeixinProviderSubentryFlow(ConfigSubentryFlow):
         }
         await self._async_update_account_index(data)
         return self.async_create_entry(
-            title=self._build_entry_title(data),
+            title=self._build_entry_title(self.hass.config.language),
             data=data,
         )
 
     @staticmethod
-    def _build_entry_title(data: dict[str, str]) -> str:
-        account_id = str(data.get(CONF_WECHAT_ACCOUNT_ID, "")).strip()
-        user_id = str(data.get(CONF_WECHAT_USER_ID, "")).strip()
-        suffix = account_id or user_id
-        if suffix:
-            return f"WeChat ({suffix})"
-        return "WeChat"
+    def _build_entry_title(language: str) -> str:
+        titles = _load_channel_titles(language)
+        return titles.get(PROVIDER_WECHAT, PROVIDER_WECHAT)
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        subentry = self._get_reconfigure_subentry()
+        current_data = dict(subentry.data)
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            new_data = {
+                **current_data,
+                _CONF_WECHAT_SHOW_LIVE_PROGRESS: user_input.get(_CONF_WECHAT_SHOW_LIVE_PROGRESS, False),
+            }
+            entry = self._get_entry()
+            result = self.async_update_and_abort(entry, subentry, data=new_data)
+            
+            async def _reload() -> None:
+                await self.hass.config_entries.async_reload(entry.entry_id)
+            
+            self.hass.async_create_task(_reload(), "cn_im_hub_wechat_reload")
+            return result
+
+        schema = vol.Schema(
+            {
+                vol.Optional(
+                    _CONF_WECHAT_SHOW_LIVE_PROGRESS,
+                    default=current_data.get(_CONF_WECHAT_SHOW_LIVE_PROGRESS, False),
+                ): bool,
+            }
+        )
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=schema,
+            errors=errors,
+        )
 
     async def _async_prepare_qr(self) -> None:
         result = await async_start_weixin_login(

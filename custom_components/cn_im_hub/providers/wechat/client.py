@@ -8,20 +8,20 @@ import logging
 from typing import Any
 
 import voluptuous as vol
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.storage import Store
 
 EVENT_LIVE_PROGRESS = "ha_crack_live_progress"
 
-from ..camera_media import (
+from ...media.camera import (
     async_capture_camera_gif,
     async_record_camera_clip,
     async_record_remote_stream_clip,
     async_resolve_camera_entity,
     resolve_ha_local_path,
 )
-from ..command import execute_command, parse_command
-from ..const import (
+from ...core.command import execute_command, im_public_url_for_source, parse_command
+from ...const import (
     CONF_WECHAT_ACCOUNT_ID,
     CONF_WECHAT_BASE_URL,
     CONF_WECHAT_TOKEN,
@@ -29,21 +29,23 @@ from ..const import (
     PROVIDER_WECHAT,
     WECHAT_DEFAULT_BASE_URL,
 )
-from ..known_targets import async_get_tracker
-from ..models import ProviderRuntime
-from ..rich_media import (
+from ...core.known_targets import async_get_tracker
+from ...models import ProviderRuntime
+from ...media.rich_media import (
     FileSegment,
     GifSegment,
     ImageSegment,
     TextSegment,
     VideoSegment,
+    VoiceSegment,
     is_camera_entity,
     is_url,
     parse_reply_segments,
 )
-from ..upstream_prompt import build_upstream_extra_prompt
-from .base import ProviderSpec
-from .wechat_auth import (
+from ...media.tts import async_generate_tts_mp3, is_edge_tts_available
+from .prompt import build_wechat_prompt
+from ..base import ProviderSpec
+from .auth import (
     SESSION_EXPIRED_ERRCODE,
     async_download_weixin_media,
     async_get_typing_ticket,
@@ -53,10 +55,11 @@ from .wechat_auth import (
     async_send_weixin_image,
     async_send_weixin_text,
     async_send_weixin_video,
+    async_send_weixin_voice,
     extract_inbound_media,
     extract_text_body,
 )
-from .wechat_flow import WeixinProviderSubentryFlow
+from .flow import WeixinProviderSubentryFlow
 
 _LOGGER = logging.getLogger(__name__)
 _STORE_VERSION = 1
@@ -70,6 +73,41 @@ _FILE_TEXT_EXTENSIONS = {".txt", ".md", ".json", ".csv", ".xml", ".yaml", ".yml"
 _GIF_COMPRESS_THRESHOLD_BYTES = 2 * 1024 * 1024
 _GIF_MAX_DIMENSION = 360
 _REMOTE_STREAM_SUFFIXES = (".m3u8", ".m3u", ".mpd", ".ts")
+_SILK_SAMPLE_RATE = 16000
+
+
+def _mp3_to_silk(mp3_bytes: bytes) -> tuple[bytes, int]:
+    """Convert MP3 bytes to SILK format. Returns (silk_bytes, duration_ms)."""
+    import os
+    import subprocess
+    import tempfile
+    import pilk
+
+    mp3_path = tempfile.mktemp(suffix=".mp3")
+    pcm_path = tempfile.mktemp(suffix=".pcm")
+    silk_path = tempfile.mktemp(suffix=".silk")
+    try:
+        with open(mp3_path, "wb") as f:
+            f.write(mp3_bytes)
+        subprocess.run(
+            [
+                "ffmpeg", "-y", "-i", mp3_path,
+                "-f", "s16le", "-acodec", "pcm_s16le",
+                "-ar", str(_SILK_SAMPLE_RATE), "-ac", "1",
+                pcm_path,
+            ],
+            check=True,
+            capture_output=True,
+        )
+        pilk.encode(pcm_path, silk_path, pcm_rate=_SILK_SAMPLE_RATE, silk_rate=_SILK_SAMPLE_RATE)
+        duration_ms = pilk.get_duration(silk_path)
+        with open(silk_path, "rb") as f:
+            silk_bytes = f.read()
+        return silk_bytes, duration_ms
+    finally:
+        for p in (mp3_path, pcm_path, silk_path):
+            with contextlib.suppress(OSError):
+                os.unlink(p)
 
 
 def _compress_image(raw: bytes, max_dim: int = 640, target_kb: int = 60) -> bytes:
@@ -270,7 +308,7 @@ class WeixinClient:
         self, source: str, *, default_name: str
     ) -> tuple[bytes, str]:
         """Resolve URL / HA local path to (bytes, file_name)."""
-        candidate = source.strip()
+        candidate = im_public_url_for_source(self._hass, source)
         if not candidate:
             raise ValueError("Media source is empty")
         if is_url(candidate):
@@ -291,8 +329,10 @@ class WeixinClient:
 
     async def _run(self) -> None:
         consecutive_failures = 0
+        total_failures = 0
+        max_total_failures = 8
         next_timeout_ms = 35_000
-        while not self._stopping:
+        while not self._stopping and total_failures < max_total_failures:
             remaining_pause = self._remaining_pause_seconds()
             if remaining_pause > 0:
                 self._status = "paused"
@@ -347,10 +387,14 @@ class WeixinClient:
                 raise
             except Exception as err:
                 consecutive_failures += 1
+                total_failures += 1
                 self._status = "error"
-                _LOGGER.warning("Weixin long-poll error (%s): %s", self._account_id, err)
-                await asyncio.sleep(30 if consecutive_failures >= 3 else 2)
-        self._status = "disconnected"
+                _LOGGER.warning("Weixin long-poll error (attempt %d/%d, account=%s): %s", total_failures, max_total_failures, self._account_id, err)
+                if total_failures >= max_total_failures:
+                    _LOGGER.error("Weixin connection failed after %d attempts, stopping (account=%s)", max_total_failures, self._account_id)
+                    break
+                await asyncio.sleep(30 if consecutive_failures >= 3 else 5)
+        self._status = "disconnected" if self._stopping else "error"
 
     async def _get_typing_ticket(self, user_id: str, context_token: str) -> str:
         now = asyncio.get_running_loop().time()
@@ -412,34 +456,36 @@ class WeixinClient:
 
         unsub = self._hass.bus.async_listen(EVENT_LIVE_PROGRESS, _listener)
         last_sent = ""
-        try:
-            while True:
-                text = await queue.get()
-                if text == last_sent:
-                    continue
+        pending_tasks: list[asyncio.Task] = []
+        
+        async def _fire_and_forget(msg: str) -> None:
+            with contextlib.suppress(Exception):
                 await async_send_weixin_text(
                     self._hass,
                     base_url=self._base_url,
                     token=self._token,
                     to_user_id=to_user_id,
                     context_token=context_token,
-                    text=text,
+                    text=msg,
                 )
+        
+        try:
+            while True:
+                text = await queue.get()
+                if text == last_sent:
+                    continue
+                task = asyncio.create_task(_fire_and_forget(text))
+                pending_tasks.append(task)
                 last_sent = text
         except asyncio.CancelledError:
             while not queue.empty():
                 text = queue.get_nowait()
                 if text and text != last_sent:
-                    with contextlib.suppress(Exception):
-                        await async_send_weixin_text(
-                            self._hass,
-                            base_url=self._base_url,
-                            token=self._token,
-                            to_user_id=to_user_id,
-                            context_token=context_token,
-                            text=text,
-                        )
+                    task = asyncio.create_task(_fire_and_forget(text))
+                    pending_tasks.append(task)
                     last_sent = text
+            if pending_tasks:
+                await asyncio.gather(*pending_tasks, return_exceptions=True)
         finally:
             unsub()
 
@@ -449,18 +495,22 @@ class WeixinClient:
                 from homeassistant.components.camera import async_get_image
                 image = await async_get_image(self._hass, source)
                 return image.content
+            source = im_public_url_for_source(self._hass, source)
             if is_url(source):
                 from homeassistant.helpers.aiohttp_client import async_get_clientsession
                 session = async_get_clientsession(self._hass)
                 async with session.get(source, timeout=30) as resp:
                     if resp.status < 400:
                         return await resp.read()
+            local_path = resolve_ha_local_path(self._hass, source)
+            if local_path and local_path.is_file():
+                return await self._hass.async_add_executor_job(local_path.read_bytes)
         except Exception:
             _LOGGER.warning("Failed to resolve image source: %s", source)
         return None
 
     async def _process_inbound_media(self, media: Any, text: str) -> str:
-        from .wechat_auth import InboundMedia
+        from .auth import InboundMedia
         if not isinstance(media, InboundMedia):
             return text or ""
         try:
@@ -540,12 +590,8 @@ class WeixinClient:
                 command,
                 conversation_id=f"wechat:{self._account_id}:{from_user_id}",
                 agent_id=self._conversation_agent_id or None,
-                extra_system_prompt=build_upstream_extra_prompt(
-                    supports_image=True,
-                    supports_video=True,
-                    supports_gif=True,
-                    supports_file=True,
-                ),
+                extra_system_prompt=build_wechat_prompt(),
+                user_id=from_user_id,
             )
             if progress_task is not None:
                 progress_task.cancel()
@@ -673,10 +719,33 @@ class WeixinClient:
                             context_token=resolved_context,
                             text=f"File send failed: {type(err).__name__}: {err}",
                         )
+                elif isinstance(seg, VoiceSegment):
+                    try:
+                        mp3_bytes = await async_generate_tts_mp3(self._hass, seg.text)
+                        await async_send_weixin_file(
+                            self._hass,
+                            base_url=self._base_url,
+                            token=self._token,
+                            to_user_id=from_user_id,
+                            context_token=resolved_context,
+                            file_bytes=mp3_bytes,
+                            file_name="voice.mp3",
+                        )
+                    except Exception as err:
+                        _LOGGER.warning("Weixin voice send failed: %s", err)
+                        await async_send_weixin_text(
+                            self._hass,
+                            base_url=self._base_url,
+                            token=self._token,
+                            to_user_id=from_user_id,
+                            context_token=resolved_context,
+                            text=f"Voice send failed: {type(err).__name__}: {err}",
+                        )
         finally:
-            progress_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await progress_task
+            if progress_task is not None:
+                progress_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await progress_task
             typing_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await typing_task
@@ -735,7 +804,7 @@ async def async_setup_provider(
         user_id=str(config.get(CONF_WECHAT_USER_ID, "")).strip(),
         conversation_agent_id=agent_id,
         subentry_id=subentry_id,
-        show_live_progress=config.get(_CONF_WECHAT_SHOW_LIVE_PROGRESS, False) is True,
+        show_live_progress=bool(config.get(_CONF_WECHAT_SHOW_LIVE_PROGRESS, False)),
     )
     tracker = await async_get_tracker(hass, subentry_id)
     client._tracker = tracker
@@ -749,7 +818,7 @@ async def async_setup_provider(
 
     return ProviderRuntime(
         key=PROVIDER_WECHAT,
-        title=f"WeChat ({account_id})" if account_id else "WeChat",
+        title=PROVIDER_WECHAT,
         subentry_id=subentry_id,
         client=client,
         stop=client.stop,
@@ -775,9 +844,9 @@ def _build_schema(current: dict[str, Any]) -> vol.Schema:
 
 PROVIDER_SPEC = ProviderSpec(
     key=PROVIDER_WECHAT,
-    title="WeChat",
     schema_builder=_build_schema,
     validate_config=async_validate_config,
     setup_provider=async_setup_provider,
     flow_handler=WeixinProviderSubentryFlow,
+    allow_multiple=True,
 )
