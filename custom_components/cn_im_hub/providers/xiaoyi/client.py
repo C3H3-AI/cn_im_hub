@@ -18,11 +18,14 @@ from uuid import uuid4
 
 import aiohttp
 import voluptuous as vol
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from ..command import execute_command, parse_command
-from ..const import (
+EVENT_LIVE_PROGRESS = "ha_crack_live_progress"
+_LIVE_PROGRESS_SEND_INTERVAL_SECONDS = 2.0
+
+from ...core.command import execute_command, parse_command
+from ...const import (
     CONF_XIAOYI_AGENT_ID,
     CONF_XIAOYI_AK,
     CONF_XIAOYI_SK,
@@ -32,14 +35,14 @@ from ..const import (
     XIAOYI_DEFAULT_WS_URL_1,
     XIAOYI_DEFAULT_WS_URL_2,
 )
-from ..known_targets import async_get_tracker
-from ..models import ProviderRuntime
-from .base import ProviderSpec
+from ...core.known_targets import async_get_tracker
+from ...models import ProviderRuntime
+from ..base import ProviderSpec
 
 _LOGGER = logging.getLogger(__name__)
 _SERVER_IDS = ("server1", "server2")
 _STABLE_CONNECTION_THRESHOLD = 30.0
-_MAX_RECONNECT_ATTEMPTS = 0
+_MAX_RECONNECT_ATTEMPTS = 8
 _WATCHDOG_INTERVAL = 20.0
 _WATCHDOG_TIMEOUT = 0.0
 
@@ -65,6 +68,7 @@ class XiaoYiClient:
         conversation_agent_id: str,
         ws_url_1: str,
         ws_url_2: str,
+        show_live_progress: bool = False,
     ) -> None:
         self._hass = hass
         self._session = async_get_clientsession(hass)
@@ -84,6 +88,7 @@ class XiaoYiClient:
         self._session_servers: dict[str, str] = {}
         self._stopping = False
         self._tracker = None
+        self._show_live_progress = show_live_progress
 
     @property
     def status(self) -> str:
@@ -338,21 +343,76 @@ class XiaoYiClient:
         self._active_prompts[task_id] = task
         task.add_done_callback(lambda _: self._active_prompts.pop(task_id, None))
 
+    def _format_live_progress(self, payload: dict[str, Any]) -> str:
+        display_text = str(payload.get("display_text") or "").strip()
+        if display_text:
+            cleaned = display_text.replace("┊", "").replace("*", "").strip()
+            return cleaned[:200]
+        tool_name = str(payload.get("tool_name") or "").strip()
+        if tool_name:
+            return f"🔧 {tool_name}"
+        return ""
+
+    async def _run_live_progress_bridge(self, conversation_id: str, task_id: str, session_id: str) -> None:
+        if not self._show_live_progress:
+            await asyncio.Future()
+
+        queue: asyncio.Queue[str] = asyncio.Queue()
+
+        @callback
+        def _listener(event) -> None:
+            payload = event.data or {}
+            if payload.get("conversation_id") != conversation_id:
+                return
+            text = self._format_live_progress(payload)
+            if text:
+                queue.put_nowait(text)
+
+        unsub = self._hass.bus.async_listen(EVENT_LIVE_PROGRESS, _listener)
+        last_sent = ""
+        pending_tasks: list[asyncio.Task] = []
+        
+        async def _fire_and_forget(msg: str) -> None:
+            with contextlib.suppress(Exception):
+                await self._send_text_chunk(task_id, session_id, msg)
+        
+        try:
+            while True:
+                progress_text = await queue.get()
+                if progress_text == last_sent:
+                    continue
+                task = asyncio.create_task(_fire_and_forget(progress_text))
+                pending_tasks.append(task)
+                last_sent = progress_text
+        except asyncio.CancelledError:
+            if pending_tasks:
+                await asyncio.gather(*pending_tasks, return_exceptions=True)
+        finally:
+            unsub()
+
     async def _process_prompt(self, task_id: str, session_id: str, text: str) -> str:
         if not text:
             await self._send_final(task_id, session_id)
             return ""
 
+        tagged_text = f"[IM:XiaoYi user={session_id}] {text}"
         try:
-            command = parse_command(text)
+            command = parse_command(tagged_text)
             reply = ""
             if command is not None:
-                reply = await execute_command(
-                    self._hass,
-                    command,
-                    conversation_id=f"xiaoyi:{session_id}",
-                    agent_id=self._conversation_agent_id or None,
-                )
+                conversation_id = f"xiaoyi:{session_id}"
+                progress_task = asyncio.create_task(self._run_live_progress_bridge(conversation_id, task_id, session_id))
+                try:
+                    reply = await execute_command(
+                        self._hass,
+                        command,
+                        conversation_id=conversation_id,
+                        agent_id=self._conversation_agent_id or None,
+                    )
+                finally:
+                    progress_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await progress_task
             if reply:
                 await self._send_text_chunk(task_id, session_id, reply)
             await self._send_final(task_id, session_id)
@@ -560,6 +620,7 @@ async def async_setup_provider(
         conversation_agent_id=agent_id,
         ws_url_1=str(config.get(CONF_XIAOYI_WS_URL_1, XIAOYI_DEFAULT_WS_URL_1)).strip() or XIAOYI_DEFAULT_WS_URL_1,
         ws_url_2=str(config.get(CONF_XIAOYI_WS_URL_2, XIAOYI_DEFAULT_WS_URL_2)).strip() or XIAOYI_DEFAULT_WS_URL_2,
+        show_live_progress=bool(config.get(_CONF_XIAOYI_SHOW_LIVE_PROGRESS, False)),
     )
     tracker = await async_get_tracker(hass, subentry_id)
     client._tracker = tracker
@@ -570,7 +631,7 @@ async def async_setup_provider(
 
     return ProviderRuntime(
         key=PROVIDER_XIAOYI,
-        title="XiaoYi",
+        title=PROVIDER_XIAOYI,
         subentry_id=subentry_id,
         client=client,
         stop=client.stop,
@@ -582,20 +643,24 @@ async def async_setup_provider(
     )
 
 
+_CONF_XIAOYI_SHOW_LIVE_PROGRESS = "xiaoyi_show_live_progress"
+
+
 def _build_schema(current: dict[str, Any]) -> vol.Schema:
     return vol.Schema(
         {
             vol.Required(CONF_XIAOYI_AK, default=current.get(CONF_XIAOYI_AK, "")): str,
             vol.Required(CONF_XIAOYI_SK, default=current.get(CONF_XIAOYI_SK, "")): str,
             vol.Required(CONF_XIAOYI_AGENT_ID, default=current.get(CONF_XIAOYI_AGENT_ID, "")): str,
+            vol.Optional(_CONF_XIAOYI_SHOW_LIVE_PROGRESS, default=current.get(_CONF_XIAOYI_SHOW_LIVE_PROGRESS, False)): bool,
         }
     )
 
 
 PROVIDER_SPEC = ProviderSpec(
     key=PROVIDER_XIAOYI,
-    title="XiaoYi",
     schema_builder=_build_schema,
     validate_config=async_validate_config,
     setup_provider=async_setup_provider,
+    allow_multiple=True,
 )
