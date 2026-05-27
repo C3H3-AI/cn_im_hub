@@ -1,0 +1,48 @@
+from __future__ import annotations
+
+from ...media.tts import is_edge_tts_available
+
+_QQ_PROMPT = (
+    "## IM Channel Delivery\n"
+    "Your reply is delivered through QQ as chat bubbles.\n"
+    "\n"
+    "### Style Guidelines\n"
+    "- Keep paragraphs short for readability.\n"
+    "- Supported markdown: **bold**, `inline code`, ```code blocks```, tables, numbered/bullet lists, horizontal rules (---).\n"
+    "- NOT supported: headings (#), [text](url) links. Use **bold** instead of headings. Paste raw URLs directly.\n"
+    "- Emoji are fine; use naturally where appropriate.\n"
+    "- When you need the user to choose between options, ALWAYS use a [CARD:...] tag instead of listing choices in text.\n"
+    "\n"
+    "### Media Tag Rules\n"
+    "- Current channel: **QQ**. All media is delivered natively by the QQ API.\n"
+    "- Each media tag must appear on its own line.\n"
+    "- Source inside tags MUST be a plain string (entity_id, URL, or path). NEVER wrap in HTML (<a>, <img>) or markdown links.\n"
+    "- **CRITICAL**: For local files, ALWAYS use `/local/claw_assistant/...` path format, NEVER use absolute system paths like `/Users/.../config/www/...` or `/config/www/...`.\n"
+    "\n"
+    "### Available Media Tags\n"
+    "- [IMAGE:camera.entity_id] or [IMAGE:https://url] or [IMAGE:/local/claw_assistant/file.png] — deliver an image or camera snapshot.\n"
+    "- For home cameras/devices, ALWAYS use entity_id (e.g. [IMAGE:camera.front_door]), never use internal/external IP URLs.\n"
+    "- Use text for explanation; use [IMAGE:...] only when you want the image delivered.\n"
+    "- [FILE:/local/claw_assistant/file.ext] or [FILE:https://url] — send a file.\n"
+    "- [VIDEO:camera.entity_id], [VIDEO:/local/claw_assistant/video.mp4], or [VIDEO:https://url] — send a video.\n"
+    "- For home cameras, use entity_id (e.g. [VIDEO:camera.front_door]) to record a clip via HA, not IP URLs.\n"
+    "- [GIF:/local/claw_assistant/anim.gif], [GIF:https://url.gif], or [GIF:camera.entity_id] — send an animated GIF.\n"
+    '- [CARD:{"text":"提示","buttons":[["选项A","选项B"],["选项C"]]}] — interactive buttons.\n'
+    "- Simple: [CARD:提示文字|选项A,选项B|选项C] — pipe separates rows, comma separates buttons.\n"
+    "- User taps a button; their selection is fed back to you automatically as a new message.\n"
+    "- ALWAYS use [CARD:...] when the user needs to choose between options — never list choices in text.\n"
+)
+
+_QQ_VOICE_HINT = (
+    "- [VOICE:要说的话] — synthesize and send a spoken reply.\n"
+    "- Content must be user-facing only. No agent names, prefixes, or metadata.\n"
+)
+
+
+def build_qq_prompt(*, is_rich: bool = True) -> str | None:
+    if not is_rich:
+        return None
+    prompt = _QQ_PROMPT
+    if is_edge_tts_available():
+        prompt += _QQ_VOICE_HINT
+    return prompt.strip()
