@@ -10,6 +10,7 @@ import json
 import logging
 import mimetypes
 from pathlib import Path
+import random
 import re
 import tempfile
 from typing import Any
@@ -23,19 +24,21 @@ import voluptuous as vol
 
 EVENT_LIVE_PROGRESS = "ha_crack_live_progress"
 
-from ..command import execute_command, parse_command
-from ..camera_media import (
+from ...core.command import execute_command, im_public_url_for_source, parse_command
+from ...media.camera import (
     async_capture_camera_gif,
     async_record_camera_clip,
     async_record_remote_stream_clip,
     async_resolve_camera_entity,
     resolve_ha_local_path,
 )
-from ..const import CONF_QQ_APP_ID, CONF_QQ_CLIENT_SECRET, PROVIDER_QQ
-from ..egdettspy import async_generate_tts_mp3, is_edge_tts_available
-from ..known_targets import async_get_tracker
-from ..models import ProviderRuntime
-from ..rich_media import (
+from ...const import CONF_QQ_APP_ID, CONF_QQ_CLIENT_SECRET, PROVIDER_QQ, QQ_API_BASE, QQ_TOKEN_URL
+from ...media.tts import async_generate_tts_mp3
+from ...core.known_targets import async_get_tracker
+from ...models import ProviderRuntime
+from ...media.card import CardButton, CardRow, CardSpec, build_inline_keyboard, parse_card_source
+from ...media.rich_media import (
+    CardSegment,
     FileSegment,
     GifSegment,
     ImageSegment,
@@ -45,13 +48,13 @@ from ..rich_media import (
     is_url,
     parse_reply_segments,
 )
-from ..upstream_prompt import build_upstream_extra_prompt
-from .base import ProviderSpec
-from .qq_chunked_upload import async_upload_media_chunked
+from .prompt import build_qq_prompt
+from ..base import ProviderSpec
+from .upload import async_upload_media_chunked
 
 _LOGGER = logging.getLogger(__name__)
-_TOKEN_URL = "https://bots.qq.com/app/getAppAccessToken"
-_API_BASE = "https://api.sgroup.qq.com"
+_TOKEN_URL = QQ_TOKEN_URL
+_API_BASE = QQ_API_BASE
 _INTENTS = (1 << 30) | (1 << 12) | (1 << 25)
 _STORE_VERSION = 1
 _TYPING_INPUT_SECOND = 60
@@ -74,7 +77,12 @@ _TEXT_FILE_EXTENSIONS = {
     ".css",
 }
 _FACE_TAG_RE = re.compile(r'<faceType=\d+,faceId="[^"]*",ext="([^"]*)">')
-_MARKDOWN_HINT_RE = re.compile(r"(^[#>*-]|\n[#>*-]|\[[^\]]+\]\([^)]+\)|```)", re.MULTILINE)
+_MARKDOWN_HINT_RE = re.compile(
+    r"(^[#>*-]|\n[#>*-]|\[[^\]]+\]\([^)]+\)|```|\|[^|\n]+\|)",
+    re.MULTILINE,
+)
+_TABLE_ROW_RE = re.compile(r"^\|(.+)\|$")
+_TABLE_SEP_RE = re.compile(r"^\|[\s:|-]+\|$")
 _HTML_HREF_RE = re.compile(r'href=["\']([^"\']+)["\']', re.IGNORECASE)
 _MARKDOWN_LINK_RE = re.compile(r"\[[^\]]*]\((https?://[^)]+)\)")
 _PLAIN_URL_RE = re.compile(r"https?://[^\s<>\"]+")
@@ -85,6 +93,11 @@ _GROUP_PROACTIVE_UNKNOWN = "unknown"
 _GROUP_PROACTIVE_ACCEPT = "accept"
 _GROUP_PROACTIVE_REJECT = "reject"
 _REMOTE_STREAM_SUFFIXES = (".m3u8", ".m3u", ".mpd")
+_CARD_ACK_PHRASES = [
+    "收到啦，马上处理呢~",
+    "好嘞，这就给你安排上呀~",
+    "嘿嘿，知道啦，稍等一下吧~",
+]
 _LIVE_PROGRESS_TYPING_IDLE_SECONDS = 12
 _LIVE_PROGRESS_SEND_INTERVAL_SECONDS = 2.0
 _LIVE_PROGRESS_TYPING_INTERVAL_SECONDS = 4.0
@@ -126,6 +139,64 @@ def _looks_like_markdown(text: str) -> bool:
     if not value:
         return False
     return bool(_MARKDOWN_HINT_RE.search(value))
+
+
+_BARE_SEP_RE = re.compile(r"^[\s|:-]+[-]{2,}[\s|:-]*$")
+
+
+def _fix_markdown_tables(text: str) -> str:
+    lines = text.split("\n")
+    fixed: list[str] = []
+    in_table = False
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+        if _TABLE_ROW_RE.match(stripped):
+            cols = len(stripped.split("|")) - 2
+            if cols > 0 and not in_table:
+                j = i + 1
+                while j < len(lines) and not lines[j].strip():
+                    j += 1
+                has_sep = j < len(lines) and (_TABLE_SEP_RE.match(lines[j].strip()) or _BARE_SEP_RE.match(lines[j].strip()))
+                has_next_row = j < len(lines) and _TABLE_ROW_RE.match(lines[j].strip())
+                if has_sep:
+                    fixed.append(line)
+                    fixed.append("| " + " | ".join(["---"] * cols) + " |")
+                    in_table = True
+                    i = j + 1
+                    continue
+                if has_next_row and j > i + 1:
+                    fixed.append(line)
+                    fixed.append("| " + " | ".join(["---"] * cols) + " |")
+                    in_table = True
+                    i = j
+                    continue
+                fixed.append(line)
+                fixed.append("| " + " | ".join(["---"] * cols) + " |")
+                in_table = True
+                i += 1
+                continue
+            fixed.append(line)
+            i += 1
+            continue
+        if in_table and not stripped:
+            in_table = False
+        if _BARE_SEP_RE.match(stripped) and in_table:
+            i += 1
+            continue
+        fixed.append(line)
+        i += 1
+    return "\n".join(fixed)
+
+
+_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+)$", re.MULTILINE)
+
+
+def _fix_qq_markdown(text: str) -> str:
+    text = _fix_markdown_tables(text)
+    text = _HEADING_RE.sub(lambda m: f"**{m.group(2).strip()}**", text)
+    return text
 
 
 def _build_approval_keyboard(approval_id: str) -> dict[str, Any]:
@@ -347,21 +418,16 @@ class QQClient:
         self._reply_sequences: dict[str, int] = {}
         self._group_proactive_status: dict[str, str] = {}
         self._show_live_progress = show_live_progress
+        self._card_futures: dict[str, asyncio.Future[str]] = {}
+        self._card_contexts: dict[str, QQInboundMessage] = {}
 
     @property
     def status(self) -> str:
         return self._status
 
     def _build_upstream_prompt(self, inbound: QQInboundMessage) -> str | None:
-        """Build dynamic upstream guidance for the current QQ target."""
-
-        return build_upstream_extra_prompt(
-            supports_image=inbound.target_kind in ("user", "group"),
-            supports_voice=inbound.target_kind in ("user", "group") and is_edge_tts_available(),
-            supports_file=inbound.target_kind in ("user", "group"),
-            supports_video=inbound.target_kind in ("user", "group"),
-            supports_gif=inbound.target_kind in ("user", "group"),
-        )
+        is_rich = inbound.target_kind in ("user", "group")
+        return build_qq_prompt(is_rich=is_rich)
 
     async def start(self) -> None:
         await self._async_load_state()
@@ -471,33 +537,33 @@ class QQClient:
             queue.put_nowait(text)
 
         unsub = self._hass.bus.async_listen(EVENT_LIVE_PROGRESS, _listener)
-        last_emit = 0.0
+        pending_tasks: list[asyncio.Task] = []
+        
+        async def _fire_and_forget(msg: str) -> None:
+            with contextlib.suppress(Exception):
+                await self._send_text_message(
+                    inbound.target,
+                    msg,
+                    reply_to_message_id=inbound.message_id or None,
+                )
+        
         try:
             while True:
                 text = await queue.get()
-                now = asyncio.get_running_loop().time()
-                if text == state.last_sent_text and (now - last_emit) < _LIVE_PROGRESS_SEND_INTERVAL_SECONDS:
+                if text == state.last_sent_text:
                     continue
-                if (now - last_emit) < _LIVE_PROGRESS_SEND_INTERVAL_SECONDS:
-                    await asyncio.sleep(_LIVE_PROGRESS_SEND_INTERVAL_SECONDS - (now - last_emit))
-                await self._send_text_message(
-                    inbound.target,
-                    text,
-                    reply_to_message_id=inbound.message_id or None,
-                )
+                task = asyncio.create_task(_fire_and_forget(text))
+                pending_tasks.append(task)
                 state.last_sent_text = text
-                last_emit = asyncio.get_running_loop().time()
         except asyncio.CancelledError:
             while not queue.empty():
                 text = queue.get_nowait()
                 if text and text != state.last_sent_text:
-                    with contextlib.suppress(Exception):
-                        await self._send_text_message(
-                            inbound.target,
-                            text,
-                            reply_to_message_id=inbound.message_id or None,
-                        )
+                    task = asyncio.create_task(_fire_and_forget(text))
+                    pending_tasks.append(task)
                     state.last_sent_text = text
+            if pending_tasks:
+                await asyncio.gather(*pending_tasks, return_exceptions=True)
         finally:
             unsub()
 
@@ -517,13 +583,16 @@ class QQClient:
             await asyncio.sleep(_LIVE_PROGRESS_TYPING_INTERVAL_SECONDS)
 
     async def _run(self) -> None:
-        while True:
+        max_retries = 8
+        retry_count = 0
+        while retry_count < max_retries:
             self._status = "connecting"
             try:
                 token = await self._get_token()
                 gateway = await self._get_gateway(token)
                 self._ws = await self._session.ws_connect(gateway, heartbeat=30)
                 self._status = "connected"
+                retry_count = 0
                 async for msg in self._ws:
                     if msg.type != aiohttp.WSMsgType.TEXT:
                         continue
@@ -531,15 +600,19 @@ class QQClient:
             except asyncio.CancelledError:
                 raise
             except Exception as err:
-                _LOGGER.warning("QQ loop error: %s", err)
-                self._status = "error"
+                retry_count += 1
+                _LOGGER.warning("QQ loop error (attempt %d/%d): %s", retry_count, max_retries, err)
+                if retry_count >= max_retries:
+                    _LOGGER.error("QQ connection failed after %d attempts, stopping", max_retries)
+                    self._status = "error"
+                    break
             finally:
                 if self._ws and not self._ws.closed:
                     await self._ws.close()
                 self._ws = None
                 if self._status != "error":
                     self._status = "disconnected"
-            await asyncio.sleep(3)
+            await asyncio.sleep(5)
 
     async def _handle_payload(self, payload: dict[str, Any]) -> None:
         if payload.get("op") == 10:
@@ -562,7 +635,9 @@ class QQClient:
         inbound = await self._parse_inbound(event_type, data)
         if inbound is None:
             return
+        asyncio.create_task(self._process_inbound(inbound))
 
+    async def _process_inbound(self, inbound: QQInboundMessage) -> None:
         if self._tracker is not None:
             await self._tracker.async_record(
                 provider=PROVIDER_QQ,
@@ -614,6 +689,7 @@ class QQClient:
                 conversation_id=f"qq:{inbound.target}",
                 agent_id=self._agent_id,
                 extra_system_prompt=self._build_upstream_prompt(inbound),
+                user_id=inbound.display_name or inbound.target_id,
             )
             if progress_task is not None:
                 progress_task.cancel()
@@ -624,7 +700,11 @@ class QQClient:
             if not reply:
                 return
             segments = parse_reply_segments(reply)
+            prev_was_media = False
             for segment in segments:
+                if prev_was_media:
+                    await asyncio.sleep(1.0)
+                prev_was_media = False
                 if isinstance(segment, TextSegment):
                     await self._send_text_message(
                         inbound.target,
@@ -647,10 +727,18 @@ class QQClient:
                             target_type=inbound.target_kind,
                             reply_to_message_id=inbound.message_id or None,
                         )
+                        prev_was_media = True
                     except ValueError:
                         await self._send_text_message(
                             inbound.target,
                             "当前 QQ 频道暂不支持图片回复。",
+                            reply_to_message_id=inbound.message_id or None,
+                        )
+                    except Exception as err:
+                        _LOGGER.warning("QQ image send failed (%s): %s", segment.source, err)
+                        await self._send_text_message(
+                            inbound.target,
+                            f"图片发送失败: {segment.source}",
                             reply_to_message_id=inbound.message_id or None,
                         )
                 elif isinstance(segment, VoiceSegment):
@@ -665,6 +753,7 @@ class QQClient:
                             target_type=inbound.target_kind,
                             reply_to_message_id=inbound.message_id or None,
                         )
+                        prev_was_media = True
                     except ValueError:
                         await self._send_text_message(
                             inbound.target,
@@ -693,6 +782,7 @@ class QQClient:
                             reply_to_message_id=inbound.message_id or None,
                             file_name=file_name,
                         )
+                        prev_was_media = True
                     except Exception as err:
                         _LOGGER.warning("QQ file send failed: %s", err)
                         await self._send_text_message(
@@ -727,6 +817,7 @@ class QQClient:
                             reply_to_message_id=inbound.message_id or None,
                             file_name=file_name,
                         )
+                        prev_was_media = True
                     except Exception as err:
                         _LOGGER.warning("QQ video send failed: %s", err)
                         await self._send_text_message(
@@ -755,6 +846,7 @@ class QQClient:
                             reply_to_message_id=inbound.message_id or None,
                             file_name="animated.gif",
                         )
+                        prev_was_media = True
                     except Exception as err:
                         _LOGGER.warning("QQ gif send failed: %s", err)
                         await self._send_text_message(
@@ -762,6 +854,26 @@ class QQClient:
                             f"GIF source unavailable: {segment.source}",
                             reply_to_message_id=inbound.message_id or None,
                         )
+                elif isinstance(segment, CardSegment):
+                    card_spec = parse_card_source(segment.source)
+                    if card_spec is None:
+                        await self._send_text_message(
+                            inbound.target,
+                            f"Invalid card: {segment.source[:100]}",
+                            reply_to_message_id=inbound.message_id or None,
+                        )
+                        continue
+                    card_id = card_spec.card_id or uuid.uuid4().hex[:8]
+                    card_spec.card_id = card_id
+                    keyboard = build_inline_keyboard(card_spec)
+                    await self._send_text_message(
+                        inbound.target,
+                        card_spec.text or " ",
+                        reply_to_message_id=inbound.message_id or None,
+                        message_format="markdown",
+                        inline_keyboard=keyboard,
+                    )
+                    self._card_contexts[card_id] = inbound
         except Exception as err:
             _LOGGER.exception("QQ command execution failed: %s", err)
             await self._send_text_message(
@@ -805,6 +917,31 @@ class QQClient:
                 "raw": data,
             },
         )
+        card_match = re.match(r"^card:([^:]*):(.+)$", button_data)
+        if card_match:
+            card_id, selection = card_match.groups()
+            fut = self._card_futures.pop(card_id, None)
+            if fut and not fut.done():
+                fut.set_result(selection)
+            else:
+                inbound = self._card_contexts.pop(card_id, None)
+                if inbound is not None:
+                    asyncio.create_task(
+                        self._handle_card_selection(inbound, selection)
+                    )
+            self._hass.bus.async_fire(
+                _INTERACTION_EVENT,
+                {
+                    "provider": PROVIDER_QQ,
+                    "type": "card_selection",
+                    "card_id": card_id,
+                    "selection": selection,
+                    "user_id": user_id,
+                    "group_id": group_id,
+                },
+            )
+            return
+
         match = re.match(r"^approve:([^:]+(?:[:][^:]+)?):(allow-once|allow-always|deny)$", button_data)
         if not match:
             return
@@ -820,6 +957,32 @@ class QQClient:
                 "channel_id": channel_id,
             },
         )
+
+    async def _handle_card_selection(self, inbound: QQInboundMessage, selection: str) -> None:
+        try:
+            ack = random.choice(_CARD_ACK_PHRASES)
+            await self._send_text_message(
+                inbound.target,
+                ack,
+                reply_to_message_id=inbound.message_id or None,
+            )
+            cmd = parse_command(f"用户选择了: {selection}")
+            if cmd is not None:
+                reply = await execute_command(
+                    self._hass,
+                    cmd,
+                    conversation_id=f"qq:{inbound.target}",
+                    agent_id=self._agent_id,
+                    extra_system_prompt=self._build_upstream_prompt(inbound),
+                )
+                if reply:
+                    await self._send_text_message(
+                        inbound.target,
+                        reply,
+                        reply_to_message_id=inbound.message_id or None,
+                    )
+        except Exception as err:
+            _LOGGER.warning("QQ card selection handling failed: %s", err)
 
     async def _handle_group_proactive_status(self, data: dict[str, Any], status: str) -> None:
         group_id = str(data.get("group_openid") or "").strip()
@@ -838,25 +1001,104 @@ class QQClient:
             },
         )
 
+    _APPROVE_MODES: dict[str, tuple[str, str]] = {
+        "on": ("allowlist", "白名单模式 — 已批准命令自动加入白名单，其余需审批"),
+        "off": ("full", "审批已关闭 — 所有命令直接执行"),
+        "always": ("always", "严格模式 — 每次执行都需要人工审批"),
+    }
+
     async def _handle_slash_command(self, inbound: QQInboundMessage) -> bool:
         text = inbound.text.strip()
-        if text not in {"/bot-ping", "/bot-version", "/bot-help"}:
+        if not text.startswith("/bot-"):
             return False
+        parts = text.split(None, 1)
+        cmd = parts[0]
+        arg = parts[1].strip().lower() if len(parts) > 1 else ""
 
-        if text == "/bot-ping":
+        if cmd == "/bot-ping":
             reply = f"pong\nstatus={self._status}\ntarget={inbound.target}"
-        elif text == "/bot-version":
+        elif cmd == "/bot-version":
             reply = f"cn_im_hub qq provider\nversion={_qq_provider_version()}"
-        else:
+        elif cmd == "/bot-approve":
+            return await self._handle_approve_command(inbound, arg)
+        elif cmd == "/bot-help":
             reply = (
                 "QQ commands:\n"
-                "/bot-ping\n"
-                "/bot-version\n"
-                "/bot-help"
+                "/bot-ping — 检测连接\n"
+                "/bot-version — 查看版本\n"
+                "/bot-approve — 管理命令执行审批\n"
+                "/bot-help — 显示帮助"
             )
+        else:
+            return False
         await self._send_text_message(
             inbound.target,
             reply,
+            reply_to_message_id=inbound.message_id or None,
+        )
+        return True
+
+    async def _handle_approve_command(self, inbound: QQInboundMessage, arg: str) -> bool:
+        stored = await self._store.async_load() or {}
+        current = str(stored.get("approve_mode", "on"))
+
+        if arg == "status" or not arg:
+            mode_info = self._APPROVE_MODES.get(current, ("unknown", "未知模式"))
+            status_icon = {"on": "🟡", "off": "🟢", "always": "🔴"}.get(current, "🟡")
+            text = f"{status_icon} 当前审批配置: {mode_info[1]}"
+            keyboard = build_inline_keyboard(CardSpec(
+                text=text,
+                card_id="approve_menu",
+                rows=[
+                    CardRow(buttons=[
+                        CardButton(label="🟢 开启审批", data="approve_set:on", style=1),
+                        CardButton(label="🔴 关闭审批", data="approve_set:off", style=3),
+                    ]),
+                    CardRow(buttons=[
+                        CardButton(label="🟡 严格模式", data="approve_set:always", style=0),
+                        CardButton(label="恢复默认", data="approve_set:reset", style=0),
+                    ]),
+                ],
+            ))
+            await self._send_text_message(
+                inbound.target,
+                text,
+                reply_to_message_id=inbound.message_id or None,
+                message_format="markdown",
+                inline_keyboard=keyboard,
+            )
+            fut: asyncio.Future[str] = asyncio.get_running_loop().create_future()
+            self._card_futures["approve_menu"] = fut
+            try:
+                selection = await asyncio.wait_for(fut, timeout=120.0)
+                m = re.match(r"^approve_set:(\w+)$", selection)
+                if m:
+                    return await self._apply_approve_mode(inbound, m.group(1))
+            except asyncio.TimeoutError:
+                self._card_futures.pop("approve_menu", None)
+            return True
+
+        if arg == "reset":
+            arg = "on"
+        if arg in self._APPROVE_MODES:
+            return await self._apply_approve_mode(inbound, arg)
+
+        await self._send_text_message(
+            inbound.target,
+            f"未知参数: {arg}\n用法: /bot-approve [on|off|always|reset|status]",
+            reply_to_message_id=inbound.message_id or None,
+        )
+        return True
+
+    async def _apply_approve_mode(self, inbound: QQInboundMessage, mode: str) -> bool:
+        mode_info = self._APPROVE_MODES.get(mode, ("on", "白名单模式"))
+        stored = await self._store.async_load() or {}
+        stored["approve_mode"] = mode
+        await self._store.async_save(stored)
+        icon = {"on": "🟢", "off": "🟢", "always": "🔴"}.get(mode, "🟡")
+        await self._send_text_message(
+            inbound.target,
+            f"{icon} 审批配置已更新: {mode_info[1]}",
             reply_to_message_id=inbound.message_id or None,
         )
         return True
@@ -1512,7 +1754,7 @@ class QQClient:
 
     async def _resolve_image(self, source: str) -> bytes | None:
         try:
-            source = _normalize_media_source(source)
+            source = im_public_url_for_source(self._hass, _normalize_media_source(source))
             resolved_camera = await async_resolve_camera_entity(self._hass, source)
             if resolved_camera is not None:
                 from homeassistant.components.camera import async_get_image
@@ -1549,7 +1791,7 @@ class QQClient:
 
         body: dict[str, Any]
         if use_markdown:
-            body = {"markdown": {"content": text}, "msg_type": 2}
+            body = {"markdown": {"content": _fix_qq_markdown(text)}, "msg_type": 2}
         else:
             body = {"content": text, "msg_type": 0}
 
@@ -1686,7 +1928,7 @@ async def async_setup_provider(
         client_secret,
         agent_id,
         subentry_id=subentry_id,
-        show_live_progress=config.get(_CONF_QQ_SHOW_LIVE_PROGRESS, False) is True,
+        show_live_progress=bool(config.get(_CONF_QQ_SHOW_LIVE_PROGRESS, False)),
     )
     tracker = await async_get_tracker(hass, subentry_id)
     client._tracker = tracker
@@ -1715,7 +1957,7 @@ async def async_setup_provider(
 
     return ProviderRuntime(
         key=PROVIDER_QQ,
-        title="QQ",
+        title=PROVIDER_QQ,
         subentry_id=subentry_id,
         client=client,
         stop=client.stop,
@@ -1743,7 +1985,6 @@ def _build_schema(current: dict[str, Any]) -> vol.Schema:
 
 PROVIDER_SPEC = ProviderSpec(
     key=PROVIDER_QQ,
-    title="QQ",
     schema_builder=_build_schema,
     validate_config=async_validate_config,
     setup_provider=async_setup_provider,

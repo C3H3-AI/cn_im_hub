@@ -6,6 +6,7 @@ from functools import lru_cache
 
 from ..provider_flow import build_simple_provider_flow
 from .base import ProviderSpec
+from .custom import PROVIDER_SPEC as CUSTOM_PROVIDER_SPEC
 from .dingtalk import PROVIDER_SPEC as DINGTALK_PROVIDER_SPEC
 from .feishu import PROVIDER_SPEC as FEISHU_PROVIDER_SPEC
 from .qq import PROVIDER_SPEC as QQ_PROVIDER_SPEC
@@ -21,6 +22,7 @@ _PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
     FEISHU_PROVIDER_SPEC,
     DINGTALK_PROVIDER_SPEC,
     XIAOYI_PROVIDER_SPEC,
+    CUSTOM_PROVIDER_SPEC,
 )
 
 

@@ -1,8 +1,7 @@
-"""Config flow for CN IM Hub."""
-
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import Any
 
 import voluptuous as vol
@@ -22,76 +21,74 @@ async def _get_preferred_agent_id(hass) -> str:
         from homeassistant.components.assist_pipeline.pipeline import async_get_pipeline
 
         pipeline = async_get_pipeline(hass)
-        if isinstance(pipeline.conversation_engine, str) and pipeline.conversation_engine:
-            return pipeline.conversation_engine
+        return pipeline.conversation_engine if isinstance(pipeline.conversation_engine, str) else ""
     except Exception as err:
         _LOGGER.debug("Unable to resolve preferred assist pipeline: %r", err)
-    return ""
+        return ""
 
 
 def _normalize_agent_id_for_storage(hass, agent_id: str) -> str:
     candidate = agent_id.strip()
-    if not candidate or candidate == "conversation.home_assistant":
-        return candidate
-
-    if candidate.startswith("conversation."):
-        entity = er.async_get(hass).async_get(candidate)
-        if entity and entity.config_entry_id:
-            return entity.config_entry_id
-
-    return candidate
+    entity = er.async_get(hass).async_get(candidate) if candidate.startswith("conversation.") else None
+    return (
+        candidate
+        if not candidate or candidate == "conversation.home_assistant"
+        else entity.config_entry_id if entity and entity.config_entry_id
+        else candidate
+    )
 
 
 def _resolve_agent_id_for_selector(hass, agent_id: str) -> str:
     candidate = agent_id.strip()
-    if not candidate or candidate == "conversation.home_assistant":
-        return candidate
-
-    if candidate.startswith("conversation."):
-        return candidate
-
-    entity_registry = er.async_get(hass)
-    for entry in entity_registry.entities.values():
-        if entry.domain != "conversation":
-            continue
-        if entry.config_entry_id == candidate:
-            return entry.entity_id
-
-    return candidate
+    match = next(
+        (
+            entry.entity_id
+            for entry in er.async_get(hass).entities.values()
+            if entry.domain == "conversation" and entry.config_entry_id == candidate
+        ),
+        "",
+    )
+    return candidate if not candidate or candidate == "conversation.home_assistant" or candidate.startswith("conversation.") else match or candidate
 
 
 def _agent_selector(hass) -> selector.ConversationAgentSelector:
     return selector.ConversationAgentSelector({"language": hass.config.language})
 
 
-class ConfigFlow(HAConfigFlow, domain=DOMAIN):
-    """Hub-level config flow; providers are loaded dynamically from registry."""
+def _agent_schema(hass, default: str) -> vol.Schema:
+    return vol.Schema({vol.Required(CONF_AGENT_ID, default=default): _agent_selector(hass)})
 
+
+async def _agent_step(
+    flow,
+    *,
+    step_id: str,
+    default_agent: str,
+    user_input: dict[str, Any] | None,
+    submit: Callable[[str], ConfigFlowResult],
+) -> ConfigFlowResult:
+    agent_id = str((user_input or {}).get(CONF_AGENT_ID, "")).strip()
+    errors = {"base": "agent_id_required"} if user_input is not None and not agent_id else {}
+    return (
+        submit(_normalize_agent_id_for_storage(flow.hass, agent_id))
+        if agent_id
+        else flow.async_show_form(step_id=step_id, data_schema=_agent_schema(flow.hass, default_agent), errors=errors)
+    )
+
+
+class ConfigFlow(HAConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        errors: dict[str, str] = {}
         preferred_agent = await _get_preferred_agent_id(self.hass)
-        default_agent = _resolve_agent_id_for_selector(self.hass, preferred_agent)
-        if user_input is not None:
-            agent_id = str(user_input.get(CONF_AGENT_ID, "")).strip()
-            if not agent_id:
-                errors["base"] = "agent_id_required"
-            else:
-                return self.async_create_entry(
-                    title="",
-                    data={},
-                    options={CONF_AGENT_ID: _normalize_agent_id_for_storage(self.hass, agent_id)},
-                )
-
-        return self.async_show_form(
+        return await _agent_step(
+            self,
             step_id="user",
-            data_schema=vol.Schema(
-                {vol.Required(CONF_AGENT_ID, default=default_agent): _agent_selector(self.hass)}
-            ),
-            errors=errors,
+            default_agent=_resolve_agent_id_for_selector(self.hass, preferred_agent),
+            user_input=user_input,
+            submit=lambda agent_id: self.async_create_entry(title="", data={}, options={CONF_AGENT_ID: agent_id}),
         )
 
     @staticmethod
@@ -105,13 +102,10 @@ class ConfigFlow(HAConfigFlow, domain=DOMAIN):
 
 
 class OptionsFlowHandler(OptionsFlow):
-    """Manage global conversation agent only."""
-
     def __init__(self, config_entry: ConfigEntry) -> None:
         self._config_entry = config_entry
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
-        errors: dict[str, str] = {}
         preferred_agent = await _get_preferred_agent_id(self.hass)
         current = str(
             self._config_entry.options.get(
@@ -120,21 +114,10 @@ class OptionsFlowHandler(OptionsFlow):
             )
         ).strip()
         current = _resolve_agent_id_for_selector(self.hass, current)
-
-        if user_input is not None:
-            agent_id = str(user_input.get(CONF_AGENT_ID, "")).strip()
-            if not agent_id:
-                errors["base"] = "agent_id_required"
-            else:
-                return self.async_create_entry(
-                    title="",
-                    data={CONF_AGENT_ID: _normalize_agent_id_for_storage(self.hass, agent_id)},
-                )
-
-        return self.async_show_form(
+        return await _agent_step(
+            self,
             step_id="init",
-            data_schema=vol.Schema(
-                {vol.Required(CONF_AGENT_ID, default=current): _agent_selector(self.hass)}
-            ),
-            errors=errors,
+            default_agent=current,
+            user_input=user_input,
+            submit=lambda agent_id: self.async_create_entry(title="", data={CONF_AGENT_ID: agent_id}),
         )

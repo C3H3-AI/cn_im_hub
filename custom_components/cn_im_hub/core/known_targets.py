@@ -9,7 +9,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
-from .const import DOMAIN
+from ..const import DOMAIN
 
 _STORE_VERSION = 1
 _DATA_KEY = f"{DOMAIN}_known_targets"

@@ -1,6 +1,6 @@
 send_message:
   name: Send Message
-  description: Send a message via selected IM provider.
+  description: Send a message via selected IM channel.
   fields:
     channel:
       required: true
@@ -26,7 +26,7 @@ send_message:
               value: wechat/user_id
     target:
       required: false
-      description: Optional. If omitted, the service will use the currently selected target from the matching provider selector. When multiple same-type provider instances exist, a filled target also helps route to the correct instance.
+      description: Optional. If omitted, the service will use the currently selected target from the matching channel. When multiple same-type channel instances exist, a filled target also helps route to the correct instance.
       selector:
         text:
     wechat_account_id:
@@ -41,7 +41,7 @@ send_message:
         text:
     tts_text:
       required: false
-      description: Text to synthesize and send as voice when the provider supports TTS media sending.
+      description: Text to synthesize and send as voice when the channel supports TTS.
       selector:
         text:
     camera_entity:

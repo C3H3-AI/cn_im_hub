@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "即时通信合集",
-        "description": "先选择一个全局会话 agent。后续服务在集成页面中按按钮逐个添加。"
+        "description": "先选择一个全局会话 Agent，后续通道在集成页面中逐个添加。"
       }
     },
     "error": {
@@ -16,7 +16,7 @@
     "step": {
       "init": {
         "title": "设置全局 Agent",
-        "description": "所有服务统一使用这一个会话 Agent。"
+        "description": "所有通道统一使用这一个会话 Agent。"
       }
     },
     "error": {
@@ -26,7 +26,7 @@
   "services": {
     "send_message": {
       "name": "发送消息",
-      "description": "通过选定的即时通信服务发送消息。",
+      "description": "通过选定的即时通信通道发送消息。",
       "fields": {
         "wechat_account_id": {
           "name": "微信账号",
@@ -81,7 +81,6 @@
   },
   "config_subentries": {
     "feishu": {
-      "entry_type": "飞书服务",
       "initiate_flow": {
         "user": "添加飞书",
         "reconfigure": "飞书设置"
@@ -89,15 +88,25 @@
       "step": {
         "set_options": {
           "title": "添加飞书",
+          "description": "请前往 飞书开放平台 创建应用，获取 App ID 和 App Secret。\n\n输入之后点击提交，请主动在通道端打招呼。",
           "data": {
             "app_id": "App ID",
-            "app_secret": "App Secret"
+            "app_secret": "App Secret",
+            "feishu_show_live_progress": "显示思考与工具进度"
           }
         }
-      }
+      },
+      "abort": {
+        "already_configured": "飞书通道已配置。",
+        "reconfigure_successful": "飞书通道更新成功。",
+        "max_instances_reached": "已达到最大实例数限制（3个）。"
+      },
+      "error": {
+        "cannot_connect": "飞书配置验证失败。"
+      },
+      "entry_type": "飞书通道"
     },
     "wecom": {
-      "entry_type": "企微服务",
       "initiate_flow": {
         "user": "添加企微",
         "reconfigure": "企微设置"
@@ -105,32 +114,51 @@
       "step": {
         "set_options": {
           "title": "添加企微",
+          "description": "请前往 企业微信管理后台 创建应用，获取 Bot ID 和 Secret。\n\n输入之后点击提交，请主动在通道端打招呼。",
           "data": {
             "bot_id": "Bot ID",
-            "secret": "Secret"
+            "secret": "Secret",
+            "wecom_show_live_progress": "显示思考与工具进度"
           }
         }
-      }
+      },
+      "abort": {
+        "already_configured": "企微通道已配置。",
+        "reconfigure_successful": "企微通道更新成功。",
+        "max_instances_reached": "已达到最大实例数限制（3个）。"
+      },
+      "error": {
+        "cannot_connect": "企微配置验证失败。"
+      },
+      "entry_type": "企业微信通道"
     },
     "qq": {
-      "entry_type": "QQ服务",
       "initiate_flow": {
-        "user": "添加QQ",
-        "reconfigure": "QQ设置"
+        "user": "添加 QQ",
+        "reconfigure": "QQ 设置"
       },
       "step": {
         "set_options": {
-          "title": "添加QQ",
+          "title": "添加 QQ",
+          "description": "请前往 QQ 开放平台 创建机器人，获取 App ID 和 App Secret。\n\n输入之后点击提交，请主动在通道端打招呼。",
           "data": {
             "qq_app_id": "App ID",
             "qq_client_secret": "App Secret",
             "qq_show_live_progress": "显示思考与工具进度"
           }
         }
-      }
+      },
+      "abort": {
+        "already_configured": "QQ 通道已配置。",
+        "reconfigure_successful": "QQ 通道更新成功。",
+        "max_instances_reached": "已达到最大实例数限制（3个）。"
+      },
+      "error": {
+        "cannot_connect": "QQ 配置验证失败。"
+      },
+      "entry_type": "QQ通道"
     },
     "dingtalk": {
-      "entry_type": "钉钉服务",
       "initiate_flow": {
         "user": "添加钉钉",
         "reconfigure": "钉钉设置"
@@ -138,27 +166,53 @@
       "step": {
         "set_options": {
           "title": "添加钉钉",
+          "description": "请前往 钉钉开放平台 创建应用，获取 Client ID 和 Client Secret。\n\n输入之后点击提交，请主动在通道端打招呼。",
           "data": {
             "dingtalk_client_id": "Client ID",
-            "dingtalk_client_secret": "Client Secret"
+            "dingtalk_client_secret": "Client Secret",
+            "dingtalk_show_live_progress": "显示思考与工具进度"
           }
         }
-      }
+      },
+      "abort": {
+        "already_configured": "钉钉通道已配置。",
+        "reconfigure_successful": "钉钉通道更新成功。",
+        "max_instances_reached": "已达到最大实例数限制（3个）。"
+      },
+      "error": {
+        "cannot_connect": "钉钉配置验证失败。"
+      },
+      "entry_type": "钉钉通道"
     },
     "wechat": {
-      "entry_type": "个人微信",
       "initiate_flow": {
-        "user": "添加个人微信"
+        "user": "添加微信",
+        "reconfigure": "微信设置"
       },
       "step": {
+        "reconfigure": {
+          "title": "微信设置",
+          "data": {
+            "wechat_show_live_progress": "显示思考与工具进度"
+          }
+        },
         "auth_wait": {
           "title": "等待微信登录确认",
           "description": "请用微信扫码并在手机上确认登录，确认后点击提交。\n\n{qr_markdown}\n\n二维码链接：{qr_url}"
         }
-      }
+      },
+      "abort": {
+        "already_configured": "微信通道已配置。",
+        "reconfigure_successful": "微信通道更新成功。",
+        "max_instances_reached": "已达到最大实例数限制（3个）。"
+      },
+      "error": {
+        "cannot_connect": "微信配置验证失败。",
+        "auth_not_confirmed": "扫码登录尚未确认。"
+      },
+      "entry_type": "微信通道"
     },
     "xiaoyi": {
-      "entry_type": "小艺服务",
       "initiate_flow": {
         "user": "添加小艺",
         "reconfigure": "小艺设置"
@@ -166,13 +220,48 @@
       "step": {
         "set_options": {
           "title": "添加小艺",
+          "description": "请前往 华为开发者联盟 获取 Access Key 和 Secret Key。\n\n输入之后点击提交，请主动在通道端打招呼。",
           "data": {
             "xiaoyi_ak": "Access Key",
             "xiaoyi_sk": "Secret Key",
-            "xiaoyi_agent_id": "小艺 Agent ID"
+            "xiaoyi_agent_id": "小艺 Agent ID",
+            "xiaoyi_show_live_progress": "显示思考与工具进度"
           }
         }
-      }
+      },
+      "abort": {
+        "already_configured": "小艺通道已配置。",
+        "reconfigure_successful": "小艺通道更新成功。",
+        "max_instances_reached": "已达到最大实例数限制（3个）。"
+      },
+      "error": {
+        "cannot_connect": "小艺配置验证失败。"
+      },
+      "entry_type": "小艺通道"
+    },
+    "custom": {
+      "initiate_flow": {
+        "user": "添加自定义通道",
+        "reconfigure": "自定义通道设置"
+      },
+      "step": {
+        "set_options": {
+          "title": "添加自定义通道",
+          "description": "通过 YAML 配置自定义通道（邮件/HTTP API）。\n\n系统会自动检测配置类型。",
+          "data": {
+            "custom_yaml": "YAML 配置"
+          }
+        }
+      },
+      "abort": {
+        "already_configured": "自定义通道已配置。",
+        "reconfigure_successful": "自定义通道更新成功。",
+        "max_instances_reached": "已达到最大实例数限制（3个）。"
+      },
+      "error": {
+        "cannot_connect": "配置验证失败。"
+      },
+      "entry_type": "自定义通道"
     }
   }
 }

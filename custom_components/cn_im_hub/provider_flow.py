@@ -1,11 +1,10 @@
-"""Shared provider flow helpers."""
-
 from __future__ import annotations
 
+import json
 import logging
+from pathlib import Path
 from typing import Any
 
-import voluptuous as vol
 from homeassistant.config_entries import ConfigSubentryFlow, SubentryFlowResult
 
 from .providers.base import ProviderSpec
@@ -13,86 +12,99 @@ from .providers.base import ProviderSpec
 _LOGGER = logging.getLogger(__name__)
 
 
-class BaseProviderSubentryFlow(ConfigSubentryFlow):
-    """Shared base for provider subentry flows."""
-
-    _provider_spec: ProviderSpec
-    _current: dict[str, Any]
-
-    @property
-    def _is_new(self) -> bool:
-        return self.source == "user"
-
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> SubentryFlowResult:
-        if not self._provider_spec.allow_multiple:
-            existing = [
-                subentry
-                for subentry in self._get_entry().subentries.values()
-                if subentry.subentry_type == self._provider_spec.key
-            ]
-            if existing:
-                return self.async_abort(reason="already_configured")
-        self._current = {}
-        return await self.async_step_set_options(user_input)
-
-    async def async_step_reconfigure(
-        self, user_input: dict[str, Any] | None = None
-    ) -> SubentryFlowResult:
-        self._current = dict(self._get_reconfigure_subentry().data)
-        return await self.async_step_set_options(user_input)
-
-    async def _async_complete(self, data: dict[str, str]) -> SubentryFlowResult:
-        if self._is_new:
-            return self.async_create_entry(title=self._provider_spec.title, data=data)
-        return self.async_update_and_abort(
-            self._get_entry(),
-            self._get_reconfigure_subentry(),
-            data=data,
-        )
+def _normalize(data: dict[str, Any]) -> dict[str, Any]:
+    return {key: value.strip() if isinstance(value, str) else value for key, value in data.items()}
 
 
-def _normalize_user_input(data: dict[str, Any]) -> dict[str, Any]:
-    normalized: dict[str, Any] = {}
-    for key, value in data.items():
-        if isinstance(value, str):
-            normalized[key] = value.strip()
-        else:
-            normalized[key] = value
-    return normalized
+def _existing_count(flow: ConfigSubentryFlow, spec: ProviderSpec) -> int:
+    return sum(1 for sub in flow._get_entry().subentries.values() if sub.subentry_type == spec.key)
 
 
-class SimpleProviderSubentryFlow(BaseProviderSubentryFlow):
-    """Generic single-step provider flow."""
+_TRANSLATIONS_DIR = Path(__file__).parent / "translations"
+_TITLE_CACHE: dict[str, dict[str, str]] = {}
+_MAX_INSTANCES_PER_PROVIDER = 3
 
-    async def async_step_set_options(
-        self, user_input: dict[str, Any] | None
-    ) -> SubentryFlowResult:
-        errors: dict[str, str] = {}
-        if user_input is not None:
-            data = _normalize_user_input(user_input)
-            try:
-                await self._provider_spec.validate_config(self.hass, data)
-            except Exception as err:
-                _LOGGER.warning("Provider validation failed (%s): %s", self._provider_spec.key, err)
-                errors["base"] = "cannot_connect"
-            else:
-                return await self._async_complete(data)
-            self._current = data
 
-        return self.async_show_form(
-            step_id="set_options",
-            data_schema=self._provider_spec.schema_builder(self._current),
-            errors=errors,
-        )
+def _load_channel_titles(lang: str) -> dict[str, str]:
+    if lang in _TITLE_CACHE:
+        return _TITLE_CACHE[lang]
+    for candidate in (lang, "en"):
+        path = _TRANSLATIONS_DIR / f"{candidate}.json"
+        if path.is_file():
+            data = json.loads(path.read_text(encoding="utf-8"))
+            titles = {k: v.get("channel_title", k) for k, v in data.get("config_subentries", {}).items()}
+            _TITLE_CACHE[lang] = titles
+            return titles
+    return {}
+
+
+def _next_title(flow: ConfigSubentryFlow, spec: ProviderSpec) -> str:
+    titles = _load_channel_titles(flow.hass.config.language)
+    base = titles.get(spec.key, spec.key)
+    n = _existing_count(flow, spec)
+    return base if n == 0 else f"{base} #{n + 1}"
+
+
+def _current_data(flow: ConfigSubentryFlow) -> dict[str, Any]:
+    return {} if flow.source == "user" else dict(flow._get_reconfigure_subentry().data)
+
+
+async def _complete(flow: ConfigSubentryFlow, spec: ProviderSpec, data: dict[str, Any]) -> SubentryFlowResult:
+    entry = flow._get_entry()
+    if flow.source == "user":
+        result = flow.async_create_entry(title=_next_title(flow, spec), data=data)
+    else:
+        result = flow.async_update_and_abort(entry, flow._get_reconfigure_subentry(), data=data)
+    
+    async def _delayed_reload() -> None:
+        await flow.hass.config_entries.async_reload(entry.entry_id)
+    
+    flow.hass.async_create_task(_delayed_reload(), "cn_im_hub_reload_after_config")
+    return result
+
+
+async def _set_options(
+    flow: ConfigSubentryFlow,
+    spec: ProviderSpec,
+    user_input: dict[str, Any] | None,
+) -> SubentryFlowResult:
+    errors: dict[str, str] = {}
+    current = getattr(flow, "_current", _current_data(flow))
+    if user_input is not None:
+        current = _normalize(user_input)
+        try:
+            await spec.validate_config(flow.hass, current)
+            return await _complete(flow, spec, current)
+        except Exception as err:
+            _LOGGER.warning("Provider validation failed (%s): %s", spec.key, err)
+            errors["base"] = "cannot_connect"
+    flow._current = current
+    return flow.async_show_form(step_id="set_options", data_schema=spec.schema_builder(current), errors=errors)
 
 
 def build_simple_provider_flow(spec: ProviderSpec) -> type[ConfigSubentryFlow]:
-    """Build a generic flow handler for a provider spec."""
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        count = _existing_count(self, spec)
+        if not spec.allow_multiple and count > 0:
+            return self.async_abort(reason="already_configured")
+        if spec.allow_multiple and count >= _MAX_INSTANCES_PER_PROVIDER:
+            return self.async_abort(reason="max_instances_reached")
+        return await async_step_set_options(self, user_input)
 
-    class _ProviderFlow(SimpleProviderSubentryFlow):
-        _provider_spec = spec
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        self._current = _current_data(self)
+        return await async_step_set_options(self, user_input)
 
-    _ProviderFlow.__name__ = f"{spec.title.replace(' ', '')}ProviderSubentryFlow"
-    return _ProviderFlow
+    async def async_step_set_options(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        return await _set_options(self, spec, user_input)
+
+    return type(
+        f"{spec.key.title().replace(' ', '')}ProviderSubentryFlow",
+        (ConfigSubentryFlow,),
+        {
+            "_provider_spec": spec,
+            "async_step_user": async_step_user,
+            "async_step_reconfigure": async_step_reconfigure,
+            "async_step_set_options": async_step_set_options,
+        },
+    )

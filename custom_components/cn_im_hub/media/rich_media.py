@@ -6,7 +6,9 @@ import re
 from dataclasses import dataclass
 
 _TAG_RE = re.compile(r"\[(IMAGE|VOICE|FILE|VIDEO|GIF|CARD):(.+?)\]")
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
 _AGENT_PREFIX_ONLY = re.compile(r"^\(.+?\)\s*(?:回复|Reply)\s*[:：]?\s*$")
+_AGENT_PREFIX_RE = re.compile(r"^\((.+?)\)\s*(?:回复|Reply)\s*[:：]\s*", re.DOTALL)
 
 
 @dataclass(slots=True)
@@ -55,7 +57,7 @@ def parse_reply_segments(reply: str) -> list[Segment]:
         if before:
             segments.append(TextSegment(text=before))
         tag = match.group(1).strip().upper()
-        payload = match.group(2).strip()
+        payload = _HTML_TAG_RE.sub("", match.group(2)).strip()
         if tag == "IMAGE":
             segments.append(ImageSegment(source=payload))
         elif tag == "VOICE" and payload:
@@ -89,6 +91,13 @@ def parse_reply_segments(reply: str) -> list[Segment]:
             segments.append(TextSegment(text=prefix_text))
         segments = [s for s in segments if s is not None]
     return segments
+
+
+def extract_reply_prefix(reply: str) -> tuple[str, str]:
+    m = _AGENT_PREFIX_RE.match(reply)
+    if m:
+        return m.group(1).strip(), reply[m.end():].strip()
+    return "", reply
 
 
 def is_camera_entity(source: str) -> bool:

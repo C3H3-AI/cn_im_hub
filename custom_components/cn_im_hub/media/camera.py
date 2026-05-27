@@ -55,7 +55,9 @@ async def async_resolve_camera_entity(
         return None
 
     if candidate.startswith("camera."):
-        return candidate
+        state = hass.states.get(candidate)
+        if state is not None:
+            return candidate
 
     state = hass.states.get(candidate)
     if state is not None and state.entity_id.startswith("camera."):
@@ -65,13 +67,14 @@ async def async_resolve_camera_entity(
     if hass.states.get(prefixed) is not None:
         return prefixed
 
-    lowered = candidate.casefold()
+    lowered = candidate.casefold().removeprefix("camera.").replace("_", "").replace("-", "")
     for camera_state in hass.states.async_all("camera"):
         entity_id = camera_state.entity_id
-        if entity_id.casefold().removeprefix("camera.") == lowered:
+        normalized = entity_id.casefold().removeprefix("camera.").replace("_", "").replace("-", "")
+        if normalized == lowered:
             return entity_id
         friendly_name = str(camera_state.attributes.get("friendly_name") or "").strip()
-        if friendly_name and friendly_name.casefold() == lowered:
+        if friendly_name and friendly_name.casefold().replace("_", "").replace("-", "") == lowered:
             return entity_id
 
     return None
