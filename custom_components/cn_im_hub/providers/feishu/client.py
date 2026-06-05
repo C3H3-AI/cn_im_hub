@@ -169,7 +169,7 @@ def _message_handler_factory(hass, api, tracker, agent_id, show_live_progress: b
         prefix_name, reply_body = extract_reply_prefix(reply)
         card_title = prefix_name or "Claw Assistant"
         has_card = "[CARD:" in reply
-        segments = parse_reply_segments(reply_body if has_card else reply)
+        segments = parse_reply_segments(reply_body)
         for seg in segments:
             if isinstance(seg, TextSegment):
                 card = build_response_card(seg.text, title=card_title)
