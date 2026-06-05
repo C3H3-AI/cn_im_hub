@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "即时通信合集",
+        "title": "cn_im_hub Ultra",
         "description": "先选择一个全局会话 Agent，后续通道在集成页面中逐个添加。"
       }
     },

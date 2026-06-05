@@ -180,6 +180,9 @@ class FeishuWsClient:
         action = event.get("action") or {}
         operator = event.get("operator") or {}
         value = action.get("value", {})
+        # Only route AI-sent card actions (with from_ai flag) to the AI
+        if not (isinstance(value, dict) and value.get("from_ai")):
+            return
         user_text = ""
         if isinstance(value, dict):
             user_text = value.get("action", "")

@@ -79,3 +79,18 @@ def build_feishu_card(spec: CardSpec, *, title: str = "") -> dict:
             "elements": elements,
         },
     }
+
+
+def mark_claw(card: dict) -> dict:
+    """Inject from_ai into all button values so callbacks route back to Claw AI."""
+    def _walk(node):
+        if isinstance(node, dict):
+            if node.get("tag") == "button" and isinstance(node.get("value"), dict):
+                node["value"]["from_ai"] = True
+            for v in node.values():
+                _walk(v)
+        elif isinstance(node, list):
+            for v in node:
+                _walk(v)
+    _walk(card)
+    return card

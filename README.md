@@ -1,4 +1,4 @@
-﻿# 即时通信合集 / CN IM Hub
+# cn_im_hub Ultra
 
 把常见即时通信平台聚合到一个 Home Assistant 集成中。  
 Aggregate common Chinese IM platforms into one Home Assistant integration.
@@ -21,7 +21,18 @@ Aggregate common Chinese IM platforms into one Home Assistant integration.
 - WeChat（个人微信，支持多人绑定） / WeChat personal accounts with multi-binding
 - XiaoYi（小艺 A2A WebSocket） / XiaoYi A2A WebSocket
 
-## 功能 / Features
+## Ultra 增强功能 / Ultra Features
+
+- **全量卡片回复**：AI 回复全部以飞书卡片形式展示，不再混杂纯文本  
+  **Full card replies**: all AI responses are displayed as Feishu interactive cards.
+- **智能卡片路由**：Claw AI 发出的卡片按钮回执自动路由回 AI 处理，非 AI 来源的按钮回调触发标准 HA 事件，互不干扰  
+  **Smart card routing**: card button callbacks from Claw AI are automatically routed back to the AI; non-AI callbacks (e.g. doorbell) fire standard HA events.
+- **WebSocket + Webhook 双重卡片回调**：飞书长连接`card.action.trigger`事件与 HTTP Webhook 端点均支持 `from_ai` 过滤，AI 卡片不泄漏到自动化  
+  **Dual callback handling**: both WebSocket `card.action.trigger` events and the HTTP Webhook endpoint filter by `from_ai` flag.
+- **回调加密验证**：可选配置 `verification_token`，webhook 端点自动校验飞书回调签名，防止伪造请求  
+  **Callback security**: optional `verification_token` authenticates Feishu card callback requests.
+
+## 基础功能 / Core Features
 
 - 一个 Hub 统一接入多个 IM 平台  
   One Hub can connect multiple IM providers.
@@ -39,12 +50,10 @@ Aggregate common Chinese IM platforms into one Home Assistant integration.
   Outbound image sending currently supports WeChat, WeCom, Feishu, QQ, and DingTalk.
 - 语音只在平台已提供识别文本时转给 HA  
   Voice is passed to HA only when the platform already provides transcript text.
-- 飞书自动卡片回复：当回复内容较长或包含列表/标题等结构时，自动以卡片形式发送  
-  Feishu auto-card reply: responses are automatically sent as interactive cards when they are long or contain structured content (lists, headings, etc.).
 - 飞书卡片 + 摄像头截图：`send_message` 同时传入 `card_json` 和 `camera_entity` 时，自动抓拍并嵌入卡片  
   Feishu card + camera snapshot: when `card_json` and `camera_entity` are both provided, the camera snapshot is automatically captured and injected into the card.
-- 飞书卡片回调：集成注册了 `/api/cn_im_hub/feishu/card_callback` 端点，接收卡片按钮交互事件  
-  Feishu card callback: the integration registers `/api/cn_im_hub/feishu/card_callback` to receive card button interaction events.
+- 飞书卡片回调端点 `/api/cn_im_hub/feishu/card_callback`  
+  Feishu card callback endpoint `/api/cn_im_hub/feishu/card_callback`.
 
 ## 安装 / Installation
 
@@ -52,11 +61,11 @@ Aggregate common Chinese IM platforms into one Home Assistant integration.
    Deploy this repository to `custom_components/cn_im_hub`.
 2. 重启 Home Assistant。  
    Restart Home Assistant.
-3. 进入 `设置 -> 设备与服务 -> 添加集成`，搜索 `即时通信合集`。  
-   Go to `Settings -> Devices & Services -> Add Integration`, then search for `即时通信合集`.
+3. 进入 `设置 -> 设备与服务 -> 添加集成`，搜索 `cn_im_hub Ultra`。  
+   Go to `Settings -> Devices & Services -> Add Integration`, then search for `cn_im_hub Ultra`.
 4. 首次添加时选择一次全局 `agent_id`。  
    Select the global `agent_id` once during first setup.
-5. 之后按平台添加子服务。后台配置步骤见 [`CONFIG.zh-CN.md`](CONFIG.zh-CN.md)。  
+5. 然后按平台添加子服务。后台配置步骤见 [`CONFIG.zh-CN.md`](CONFIG.zh-CN.md)。  
    Then add provider subentries. Backend setup steps are documented in [`CONFIG.zh-CN.md`](CONFIG.zh-CN.md).
 
 [![Open your Home Assistant instance and open this repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=ha-china&repository=cn_im_hub&category=integration)
@@ -89,6 +98,20 @@ Aggregate common Chinese IM platforms into one Home Assistant integration.
   Messages are forwarded to the HA conversation agent bound to the integration-level `agent_id`.
 - 以自然语言对话为主。  
   Natural-language conversation is the main interaction style.
+- 飞书渠道支持实时进度推送（需在子服务配置中开启）。  
+  Feishu supports live progress push during AI processing (enable in subentry config).
+
+## 卡片回调路由 / Card Callback Routing
+
+```
+Claw AI 发卡片 → 按钮 value 带 from_ai 标记
+    ↓
+用户点按钮 → WebSocket 或 Webhook 收到回调
+    ↓
+判断 from_ai = true?
+  ├─ 是 → 自动路由回 AI，AI 回复以新卡片发回群中
+  └─ 否 → 触发 cn_im_hub_feishu_card_action 事件，供 HA 自动化消费
+```
 
 ## 参考 / References
 

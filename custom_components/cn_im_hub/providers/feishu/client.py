@@ -16,7 +16,9 @@ from ...core.known_targets import async_get_tracker
 from ...const import (
     CONF_FEISHU_APP_ID,
     CONF_FEISHU_APP_SECRET,
+    CONF_FEISHU_VERIFICATION_TOKEN,
     DEFAULT_FEISHU_TARGET_TYPE,
+    DOMAIN,
     PROVIDER_FEISHU,
 )
 from ...media.card import CardSpec, parse_card_source
@@ -36,7 +38,7 @@ from ...models import ProviderRuntime
 from ..base import ProviderSpec
 from .api import FeishuApiClient, async_inject_camera_snapshot
 from .webhook import FeishuCardCallbackView
-from .card import build_feishu_card
+from .card import build_feishu_card, build_response_card, mark_claw
 from .ws import FeishuWsClient
 
 _LOGGER = logging.getLogger(__name__)
@@ -60,6 +62,7 @@ async def async_setup_provider(
     show_live_progress = bool(config.get(_CONF_FEISHU_SHOW_LIVE_PROGRESS, False))
     api = FeishuApiClient(hass, app_id, app_secret)
     await api.async_validate_connection()
+    hass.data.setdefault(DOMAIN, {}).setdefault("_feishu_api_clients", {})[subentry_id] = api
     tracker = await async_get_tracker(hass, subentry_id)
     ws = FeishuWsClient(
         hass=hass,
@@ -169,7 +172,8 @@ def _message_handler_factory(hass, api, tracker, agent_id, show_live_progress: b
         segments = parse_reply_segments(reply_body if has_card else reply)
         for seg in segments:
             if isinstance(seg, TextSegment):
-                await _reply(api, receive_id, receive_type, seg.text)
+                card = build_response_card(seg.text, title=card_title)
+                await _reply(api, receive_id, receive_type, seg.text, mark_claw(card))
             elif isinstance(seg, ImageSegment):
                 try:
                     image_bytes = await _resolve_image(hass, seg.source)
@@ -186,7 +190,7 @@ def _message_handler_factory(hass, api, tracker, agent_id, show_live_progress: b
                 card_spec = parse_card_source(seg.source)
                 if card_spec:
                     feishu_card = build_feishu_card(card_spec, title=card_title)
-                    await _reply(api, receive_id, receive_type, card_spec.text or " ", feishu_card)
+                    await _reply(api, receive_id, receive_type, card_spec.text or " ", mark_claw(feishu_card))
                 else:
                     await _reply(api, receive_id, receive_type, f"Invalid card: {seg.source[:100]}")
             elif isinstance(seg, VideoSegment):
@@ -358,6 +362,7 @@ def _build_schema(current: dict[str, Any]) -> vol.Schema:
         {
             vol.Required(CONF_FEISHU_APP_ID, default=current.get(CONF_FEISHU_APP_ID, "")): str,
             vol.Required(CONF_FEISHU_APP_SECRET, default=current.get(CONF_FEISHU_APP_SECRET, "")): str,
+            vol.Optional(CONF_FEISHU_VERIFICATION_TOKEN, default=current.get(CONF_FEISHU_VERIFICATION_TOKEN, "")): str,
             vol.Optional(_CONF_FEISHU_SHOW_LIVE_PROGRESS, default=current.get(_CONF_FEISHU_SHOW_LIVE_PROGRESS, False)): bool,
         }
     )

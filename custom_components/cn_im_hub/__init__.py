@@ -40,6 +40,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     agent_id = str(dict(entry.options).get(CONF_AGENT_ID, "")).strip()
+    hass.data.setdefault(DOMAIN, {})["agent_id"] = agent_id
     specs = get_provider_specs()
     runtimes = {}
     failed_subentries: list[str] = []

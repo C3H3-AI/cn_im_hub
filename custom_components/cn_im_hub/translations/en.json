@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "CN IM Hub",
+        "title": "cn_im_hub Ultra",
         "description": "Choose one global conversation agent. Channels are added later from this integration page."
       }
     },
