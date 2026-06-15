@@ -29,6 +29,8 @@ from ...const import (
     CONF_XIAOYI_AGENT_ID,
     CONF_XIAOYI_AK,
     CONF_XIAOYI_SK,
+    CONF_XIAOYI_API_ID,
+    CONF_XIAOYI_PUSH_ID,
     CONF_XIAOYI_WS_URL_1,
     CONF_XIAOYI_WS_URL_2,
     PROVIDER_XIAOYI,
@@ -66,6 +68,8 @@ class XiaoYiClient:
         sk: str,
         xiaoyi_agent_id: str,
         conversation_agent_id: str,
+        api_id: str,
+        push_id: str,
         ws_url_1: str,
         ws_url_2: str,
         show_live_progress: bool = False,
@@ -76,6 +80,9 @@ class XiaoYiClient:
         self._sk = sk
         self._xiaoyi_agent_id = xiaoyi_agent_id
         self._conversation_agent_id = conversation_agent_id
+        self._api_id = api_id
+        self._push_id = push_id
+        self._push_id_map: dict[str, str] = {}
         self._urls = {"server1": ws_url_1, "server2": ws_url_2}
         self._states = {server_id: _ServerState() for server_id in _SERVER_IDS}
         self._ws: dict[str, aiohttp.ClientWebSocketResponse | None] = {server_id: None for server_id in _SERVER_IDS}
@@ -154,6 +161,16 @@ class XiaoYiClient:
         session_id = target.strip()
         if not session_id:
             raise ValueError("XiaoYi session_id is required")
+
+        # Try Push API first (no active session needed)
+        if self._is_push_configured():
+            push_ok = await self._try_send_push(session_id, message)
+            if push_ok:
+                _LOGGER.debug("XiaoYi sent push notification for session %s", session_id)
+                return
+            _LOGGER.info("Push API failed, falling back to WebSocket artifact-update")
+
+        # Fallback: WebSocket artifact-update (requires active session)
         server_id = self._session_servers.get(session_id)
         if not server_id:
             raise ValueError("XiaoYi session_id is unknown or no longer active")
@@ -301,6 +318,70 @@ class XiaoYiClient:
         except asyncio.CancelledError:
             raise
 
+    def _is_push_configured(self) -> bool:
+        return bool(self._api_id and self._push_id and self._ak and self._sk)
+
+    async def _try_send_push(self, session_id: str, text: str) -> bool:
+        """Try sending via HTTP Push API. Returns True on success."""
+        if not self._is_push_configured():
+            return False
+
+        dynamic_push_id = self._push_id_map.get(session_id) or self._push_id
+        timestamp = str(int(time.time() * 1000))
+        digest = hmac.new(
+            self._sk.encode("utf-8"),
+            timestamp.encode("utf-8"),
+            hashlib.sha256,
+        ).digest()
+        sign = b64encode(digest).decode("ascii")
+        trace_id = str(uuid4())
+
+        push_text = text[:1000]
+        title = text.split("\n")[0][:57]
+
+        body = {
+            "jsonrpc": "2.0",
+            "id": trace_id,
+            "result": {
+                "id": trace_id,
+                "apiId": self._api_id,
+                "pushId": dynamic_push_id,
+                "pushText": push_text,
+                "kind": "task",
+                "artifacts": [
+                    {
+                        "artifactId": f"artifact_{uuid4().hex}",
+                        "parts": [{"kind": "text", "text": push_text}],
+                    }
+                ],
+                "status": {"state": "completed"},
+            },
+        }
+
+        try:
+            async with self._session.post(
+                "https://hag.cloud.huawei.com/open-ability-agent/v1/agent-webhook",
+                json=body,
+                headers={
+                    "X-Access-Key": self._ak,
+                    "X-Sign": sign,
+                    "X-Ts": timestamp,
+                    "x-hag-trace-id": trace_id,
+                },
+                timeout=aiohttp.ClientTimeout(total=15),
+            ) as resp:
+                if resp.status == 200:
+                    return True
+                _LOGGER.warning(
+                    "Push API returned %d: %s",
+                    resp.status,
+                    (await resp.read()).decode(errors="replace")[:500],
+                )
+                return False
+        except Exception as err:
+            _LOGGER.warning("Push API request failed: %s", err)
+            return False
+
     async def _handle_message(self, server_id: str, message: dict[str, Any]) -> None:
         agent_id = str(message.get("agentId") or "")
         if agent_id and agent_id != self._xiaoyi_agent_id:
@@ -330,6 +411,17 @@ class XiaoYiClient:
 
         task_id = str(message.get("id") or "")
         text = _extract_inbound_text(message)
+        push_id = _extract_push_id(message)
+        
+        if push_id:
+            self._push_id_map[session_id] = push_id
+            _LOGGER.info("XiaoYi cached push_id=%s for session=%s", push_id, session_id)
+        
+        _LOGGER.debug(
+            "XiaoYi message/stream: session=%s push_id=%s text=%.200s",
+            session_id, push_id or "(none)", text,
+        )
+        
         if not task_id or not session_id:
             return
         if self._tracker is not None:
@@ -407,7 +499,7 @@ class XiaoYiClient:
                         self._hass,
                         command,
                         conversation_id=conversation_id,
-                        agent_id=self._conversation_agent_id or None,
+                        agent_id=None,
                     )
                 finally:
                     progress_task.cancel()
@@ -597,6 +689,17 @@ def _extract_inbound_text(message: dict[str, Any]) -> str:
     return "\n".join(chunks).strip()
 
 
+def _extract_push_id(message: dict[str, Any]) -> str | None:
+    """Extract push_id from inbound message data parts."""
+    parts = (((message.get("params") or {}).get("message") or {}).get("parts") or [])
+    for part in parts:
+        if isinstance(part, dict) and part.get("kind") == "data":
+            variables = (((part.get("data") or {}).get("variables") or {}).get("systemVariables") or {})
+            if isinstance(variables, dict) and "push_id" in variables:
+                return str(variables["push_id"])
+    return None
+
+
 async def async_validate_config(_: HomeAssistant, config: dict[str, Any]) -> None:
     ak = str(config.get(CONF_XIAOYI_AK, "")).strip()
     sk = str(config.get(CONF_XIAOYI_SK, "")).strip()
@@ -618,6 +721,8 @@ async def async_setup_provider(
         sk=str(config.get(CONF_XIAOYI_SK, "")).strip(),
         xiaoyi_agent_id=str(config.get(CONF_XIAOYI_AGENT_ID, "")).strip(),
         conversation_agent_id=agent_id,
+        api_id=str(config.get(CONF_XIAOYI_API_ID, "")).strip(),
+        push_id=str(config.get(CONF_XIAOYI_PUSH_ID, "")).strip(),
         ws_url_1=str(config.get(CONF_XIAOYI_WS_URL_1, XIAOYI_DEFAULT_WS_URL_1)).strip() or XIAOYI_DEFAULT_WS_URL_1,
         ws_url_2=str(config.get(CONF_XIAOYI_WS_URL_2, XIAOYI_DEFAULT_WS_URL_2)).strip() or XIAOYI_DEFAULT_WS_URL_2,
         show_live_progress=bool(config.get(_CONF_XIAOYI_SHOW_LIVE_PROGRESS, False)),
@@ -652,6 +757,8 @@ def _build_schema(current: dict[str, Any]) -> vol.Schema:
             vol.Required(CONF_XIAOYI_AK, default=current.get(CONF_XIAOYI_AK, "")): str,
             vol.Required(CONF_XIAOYI_SK, default=current.get(CONF_XIAOYI_SK, "")): str,
             vol.Required(CONF_XIAOYI_AGENT_ID, default=current.get(CONF_XIAOYI_AGENT_ID, "")): str,
+            vol.Optional(CONF_XIAOYI_API_ID, default=current.get(CONF_XIAOYI_API_ID, "")): str,
+            vol.Optional(CONF_XIAOYI_PUSH_ID, default=current.get(CONF_XIAOYI_PUSH_ID, "")): str,
             vol.Optional(_CONF_XIAOYI_SHOW_LIVE_PROGRESS, default=current.get(_CONF_XIAOYI_SHOW_LIVE_PROGRESS, False)): bool,
         }
     )

@@ -7,16 +7,16 @@
     "http"
   ],
   "codeowners": [
-    "@ha-china"
+    "@C3H3-AI"
   ],
   "config_flow": true,
   "dependencies": [
     "conversation"
   ],
-  "documentation": "https://github.com/ha-china/cn_im_hub",
+  "documentation": "https://github.com/C3H3-AI/cn_im_hub",
   "integration_type": "hub",
   "iot_class": "cloud_push",
-  "issue_tracker": "https://github.com/ha-china/cn_im_hub/issues",
+  "issue_tracker": "https://github.com/C3H3-AI/cn_im_hub/issues",
   "loggers": [
     "custom_components.cn_im_hub",
     "lark_oapi"
@@ -27,5 +27,5 @@
     "segno>=1.6.6",
     "edge-tts>=7.2.8"
   ],
-  "version": "2026.06.1"
+  "version": "2026.06.2"
 }

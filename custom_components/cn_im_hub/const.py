@@ -52,6 +52,8 @@ CONF_XIAOYI_SK: Final = "xiaoyi_sk"
 CONF_XIAOYI_AGENT_ID: Final = "xiaoyi_agent_id"
 CONF_XIAOYI_WS_URL_1: Final = "xiaoyi_ws_url_1"
 CONF_XIAOYI_WS_URL_2: Final = "xiaoyi_ws_url_2"
+CONF_XIAOYI_API_ID: Final = "xiaoyi_api_id"
+CONF_XIAOYI_PUSH_ID: Final = "xiaoyi_push_id"
 XIAOYI_DEFAULT_WS_URL_1: Final = "wss://hag.cloud.huawei.com/openclaw/v1/ws/link"
 XIAOYI_DEFAULT_WS_URL_2: Final = "wss://116.63.174.231/openclaw/v1/ws/link"
 
