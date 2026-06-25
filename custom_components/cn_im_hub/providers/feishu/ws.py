@@ -9,6 +9,7 @@ from collections.abc import Awaitable, Callable
 
 from homeassistant.core import HomeAssistant
 
+from ...const import DOMAIN
 from .api import import_lark
 
 _LOGGER = logging.getLogger(__name__)
@@ -180,8 +181,13 @@ class FeishuWsClient:
         action = event.get("action") or {}
         operator = event.get("operator") or {}
         value = action.get("value", {})
-        # Only route AI-sent card actions (with from_ai flag) to the AI
+        # Non-AI card actions: fire bus event for automation processing
         if not (isinstance(value, dict) and value.get("from_ai")):
+            self._hass.loop.call_soon_threadsafe(
+                self._hass.bus.async_fire,
+                f"{DOMAIN}_feishu_card_action",
+                {"action": action, "operator": operator, "raw_data": event, "from_ai": False},
+            )
             return
         user_text = ""
         if isinstance(value, dict):
