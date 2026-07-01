@@ -3,6 +3,8 @@
 把常见即时通信平台聚合到一个 Home Assistant 集成中。  
 Aggregate common Chinese IM platforms into one Home Assistant integration.
 
+> 安装前请确保在 HACS 中添加的自定义仓库地址为：`https://github.com/C3H3-AI/cn_im_hub`
+
 告别复杂的 Node-RED 工作流，告别容易出错的 YAML 编排。配合已收录在 HACS 中的 `AI HUB`，你可以直接用自然语言控制家里的设备，全部能力都在 Home Assistant 内完成。
 
 [![Open your Home Assistant instance and open AI HUB in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=ha-china&repository=ai_hub&category=integration)
