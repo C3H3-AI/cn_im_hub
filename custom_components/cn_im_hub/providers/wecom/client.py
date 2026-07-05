@@ -391,6 +391,9 @@ async def async_setup_provider(
     bot_id = str(config.get(CONF_WECOM_BOT_ID, "")).strip()
     secret = str(config.get(CONF_WECOM_SECRET, "")).strip()
     show_live_progress = bool(config.get(_CONF_WECOM_SHOW_LIVE_PROGRESS, False))
+    # Use channel-specific agent_id if configured, otherwise use global agent_id
+    channel_agent_id = str(config.get("channel_agent_id", "")).strip()
+    effective_agent_id = channel_agent_id if channel_agent_id else agent_id
     client = WeComWsClient(hass, bot_id, secret)
     tracker = await async_get_tracker(hass, subentry_id)
 

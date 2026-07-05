@@ -18,6 +18,7 @@ PROVIDERS: Final = (PROVIDER_WECOM, PROVIDER_WECHAT, PROVIDER_QQ, PROVIDER_FEISH
 CONF_ENABLED_PROVIDERS: Final = "enabled_providers"
 CONF_PROVIDERS: Final = "providers"
 CONF_AGENT_ID: Final = "agent_id"
+CONF_CHANNEL_AGENT_ID: Final = "channel_agent_id"  # Per-channel agent override
 
 CONF_QQ_APP_ID: Final = "qq_app_id"
 CONF_QQ_CLIENT_SECRET: Final = "qq_client_secret"

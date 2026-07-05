@@ -60,6 +60,11 @@ async def async_setup_provider(
 ) -> ProviderRuntime:
     app_id, app_secret = _credentials(config)
     show_live_progress = bool(config.get(_CONF_FEISHU_SHOW_LIVE_PROGRESS, False))
+
+    # Use channel-specific agent_id if configured, otherwise use global agent_id
+    channel_agent_id = str(config.get(CONF_CHANNEL_AGENT_ID, "")).strip()
+    effective_agent_id = channel_agent_id if channel_agent_id else agent_id
+
     api = FeishuApiClient(hass, app_id, app_secret)
     await api.async_validate_connection()
     hass.data.setdefault(DOMAIN, {}).setdefault("_feishu_api_clients", {})[subentry_id] = api
@@ -68,7 +73,7 @@ async def async_setup_provider(
         hass=hass,
         app_id=app_id,
         app_secret=app_secret,
-        message_handler=_message_handler_factory(hass, api, tracker, agent_id, show_live_progress),
+        message_handler=_message_handler_factory(hass, api, tracker, effective_agent_id, show_live_progress),
     )
     await ws.async_start()
     return _runtime_factory(ws, api, tracker, subentry_id, app_id)
@@ -355,6 +360,7 @@ def _runtime_factory(ws, api, tracker, subentry_id: str, app_id: str = "") -> Pr
 
 
 _CONF_FEISHU_SHOW_LIVE_PROGRESS = "feishu_show_live_progress"
+CONF_CHANNEL_AGENT_ID = "channel_agent_id"  # Per-channel agent override
 
 
 def _build_schema(current: dict[str, Any]) -> vol.Schema:

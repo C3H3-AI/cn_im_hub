@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from homeassistant.config_entries import ConfigSubentryFlow, SubentryFlowResult
+from homeassistant.helpers import selector
 
 from .providers.base import ProviderSpec
 
@@ -68,6 +69,7 @@ async def _set_options(
     spec: ProviderSpec,
     user_input: dict[str, Any] | None,
 ) -> SubentryFlowResult:
+    import voluptuous as vol
     errors: dict[str, str] = {}
     current = getattr(flow, "_current", _current_data(flow))
     if user_input is not None:
@@ -78,8 +80,21 @@ async def _set_options(
         except Exception as err:
             _LOGGER.warning("Provider validation failed (%s): %s", spec.key, err)
             errors["base"] = "cannot_connect"
+
+    # Build base schema from provider
+    base_schema = spec.schema_builder(current)
+
+    # Add channel_agent_id with dropdown selector
+    agent_selector = selector.ConversationAgentSelector({"language": flow.hass.config.language})
+    agent_schema = vol.Schema({
+        vol.Optional("channel_agent_id", default=current.get("channel_agent_id", "")): agent_selector,
+    })
+
+    # Merge schemas
+    combined_schema = vol.Schema({**base_schema.schema, **agent_schema.schema})
+
     flow._current = current
-    return flow.async_show_form(step_id="set_options", data_schema=spec.schema_builder(current), errors=errors)
+    return flow.async_show_form(step_id="set_options", data_schema=combined_schema, errors=errors)
 
 
 def build_simple_provider_flow(spec: ProviderSpec) -> type[ConfigSubentryFlow]:

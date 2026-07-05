@@ -1920,6 +1920,9 @@ async def async_setup_provider(
     agent_id: str,
     subentry_id: str,
 ) -> ProviderRuntime:
+    # Use channel-specific agent_id if configured
+    channel_agent_id = str(config.get("channel_agent_id", "")).strip()
+    effective_agent_id = channel_agent_id if channel_agent_id else agent_id
     app_id = str(config.get(CONF_QQ_APP_ID, "")).strip()
     client_secret = str(config.get(CONF_QQ_CLIENT_SECRET, "")).strip()
     client = QQClient(

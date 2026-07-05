@@ -715,12 +715,15 @@ async def async_setup_provider(
     agent_id: str,
     subentry_id: str,
 ) -> ProviderRuntime:
+    # Use channel-specific agent_id if configured
+    channel_agent_id = str(config.get("channel_agent_id", "")).strip()
+    effective_agent_id = channel_agent_id if channel_agent_id else agent_id
     client = XiaoYiClient(
         hass,
         ak=str(config.get(CONF_XIAOYI_AK, "")).strip(),
         sk=str(config.get(CONF_XIAOYI_SK, "")).strip(),
         xiaoyi_agent_id=str(config.get(CONF_XIAOYI_AGENT_ID, "")).strip(),
-        conversation_agent_id=agent_id,
+        conversation_agent_id=effective_agent_id,
         api_id=str(config.get(CONF_XIAOYI_API_ID, "")).strip(),
         push_id=str(config.get(CONF_XIAOYI_PUSH_ID, "")).strip(),
         ws_url_1=str(config.get(CONF_XIAOYI_WS_URL_1, XIAOYI_DEFAULT_WS_URL_1)).strip() or XIAOYI_DEFAULT_WS_URL_1,

@@ -796,13 +796,16 @@ async def async_setup_provider(
     subentry_id: str,
 ) -> ProviderRuntime:
     account_id = str(config.get(CONF_WECHAT_ACCOUNT_ID, "")).strip()
+    # Use channel-specific agent_id if configured, otherwise use global agent_id
+    channel_agent_id = str(config.get("channel_agent_id", "")).strip()
+    effective_agent_id = channel_agent_id if channel_agent_id else agent_id
     client = WeixinClient(
         hass,
         account_id=account_id,
         token=str(config.get(CONF_WECHAT_TOKEN, "")).strip(),
         base_url=str(config.get(CONF_WECHAT_BASE_URL, WECHAT_DEFAULT_BASE_URL)).strip() or WECHAT_DEFAULT_BASE_URL,
         user_id=str(config.get(CONF_WECHAT_USER_ID, "")).strip(),
-        conversation_agent_id=agent_id,
+        conversation_agent_id=effective_agent_id,
         subentry_id=subentry_id,
         show_live_progress=bool(config.get(_CONF_WECHAT_SHOW_LIVE_PROGRESS, False)),
     )
