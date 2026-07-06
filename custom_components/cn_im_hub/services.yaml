@@ -1,6 +1,6 @@
 send_message:
-  name: Send Message
-  description: Send a message via selected IM channel.
+  name: 发送消息
+  description: 通过选定的即时通信通道发送消息。
   fields:
     channel:
       required: true
@@ -8,30 +8,30 @@ send_message:
       selector:
         select:
           options:
-            - label: Feishu / chat_id
+            - label: 飞书 / chat_id
               value: feishu/chat_id
-            - label: WeCom / chatid
+            - label: 企业微信 / chatid
               value: wecom/chatid
-            - label: QQ / user
+            - label: QQ / 用户
               value: qq/user
-            - label: QQ / group
+            - label: QQ / 群
               value: qq/group
-            - label: QQ / channel
+            - label: QQ / 频道
               value: qq/channel
-            - label: DingTalk / user
+            - label: 钉钉 / 用户
               value: dingtalk/user
-            - label: DingTalk / group
+            - label: 钉钉 / 群
               value: dingtalk/group
-            - label: WeChat / user_id
+            - label: 微信 / 用户
               value: wechat/user_id
     target:
       required: false
-      description: Optional. If omitted, the service will use the currently selected target from the matching channel. When multiple same-type channel instances exist, a filled target also helps route to the correct instance.
+      description: 可选。不填写时将自动使用当前通道已选中的目标。当存在多个同类型通道实例时，填写目标地址也有助于路由到正确的实例。
       selector:
         text:
     wechat_account_id:
       required: false
-      description: Required when using WeChat channel with multiple bound WeChat accounts. Use the WeChat subentry title suffix or the full title.
+      description: 绑定了多个个人微信时需要填写。可使用 WeChat 子服务标题中的后缀或完整标题。
       example: "WeChat (abc123@im.bot)"
       selector:
         text:
@@ -41,111 +41,111 @@ send_message:
         text:
     tts_text:
       required: false
-      description: Text to synthesize and send as voice when the channel supports TTS.
+      description: 当服务提供方支持时，把这段文本合成为语音发送。
       selector:
         text:
     camera_entity:
       required: false
-      description: Camera entity to capture and send as an image. Currently supported by WeChat, WeCom, Feishu, QQ, and DingTalk.
+      description: 抓取该摄像头当前快照并作为图片发送。当前支持微信、企业微信、飞书、QQ 和钉钉。
       selector:
         entity:
           filter:
             domain: camera
     file_path:
       required: false
-      description: Absolute local file path to send as media. Media type can be inferred from extension or overridden by media_type.
+      description: 要作为媒体发送的本地绝对路径。媒体类型可从扩展名推断，也可通过 media_type 覆盖。
       selector:
         text:
     file_url:
       required: false
-      description: Remote URL to download and send as media. Media type can be inferred from extension or overridden by media_type.
+      description: 下载后作为媒体发送的远程 URL。媒体类型可从扩展名推断，也可通过 media_type 覆盖。
       selector:
         text:
     file_name:
       required: false
-      description: Optional outbound filename override for file media.
+      description: 文件媒体的可选发送文件名覆盖值。
       selector:
         text:
     media_type:
       required: false
-      description: Optional media type override for file_path or file_url.
+      description: 用于 file_path 或 file_url 的可选媒体类型覆盖。
       selector:
         select:
           options:
-            - label: Infer automatically
+            - label: 自动推断
               value: ""
-            - label: Image
+            - label: 图片
               value: image
-            - label: GIF
+            - label: 动图
               value: gif
-            - label: Voice
+            - label: 语音
               value: voice
-            - label: Video
+            - label: 视频
               value: video
-            - label: File
+            - label: 文件
               value: file
     message_format:
       required: false
-      description: Optional outbound text format override. Currently QQ supports auto, text, and markdown.
+      description: 可选的出站文本格式覆盖。当前 QQ 支持自动、纯文本和 Markdown。
       selector:
         select:
           options:
-            - label: Auto
+            - label: 自动
               value: auto
-            - label: Plain text
+            - label: 纯文本
               value: text
             - label: Markdown
               value: markdown
     approval_id:
       required: false
-      description: When set, send the message as a QQ approval prompt with inline allow/deny buttons.
+      description: 设置后，将消息作为 QQ 审批提示发送，并附带允许/拒绝按钮。
       selector:
         text:
     record_duration:
       required: false
-      description: When camera_entity is used for video or GIF capture, planned recording/capture duration in seconds. GIF defaults to 3 seconds when omitted.
+      description: 当 camera_entity 用于视频或 GIF 采集时，计划录制或采集的秒数。未填写时，GIF 默认 3 秒。
       selector:
         number:
           min: 1
           max: 60
-          unit_of_measurement: seconds
+          unit_of_measurement: 秒
     lookback:
       required: false
-      description: Optional lookback seconds to include before camera video recording starts. Only applies to video capture.
+      description: 视频录制开始前额外包含的回看秒数。仅用于视频采集。
       selector:
         number:
           min: 0
           max: 30
-          unit_of_measurement: seconds
+          unit_of_measurement: 秒
     gif_fps:
       required: false
-      description: Frames per second when generating an animated GIF from camera snapshots.
+      description: 从摄像头快照生成动图时的每秒帧数。
       selector:
         number:
           min: 1
           max: 10
     card_json:
       required: false
-      description: JSON string of an interactive card to send. When provided, other message fields are ignored.
+      description: 交互式卡片的 JSON 字符串。填写此项时会忽略其他消息字段。
       selector:
         text:
     card_title:
       required: false
       description: >
-        Card header title. Defaults to "Claw Assistant" when omitted. Used with card_content/card_buttons.
+        卡片头部标题。与 card_content/card_buttons 搭配使用，不填写时默认显示 "Claw Assistant"。
       selector:
         text:
     card_content:
       required: false
       description: >
-        Card body text / markdown content. Used together with card_buttons for simple card
-        building without writing JSON.
+        卡片正文文本或 Markdown 内容。与 card_buttons 配合使用可替代手写 JSON。
       selector:
         text:
           multiline: true
     card_buttons:
       required: false
       description: >
-        Buttons in simple format. Use `|` to separate rows, `,` for buttons in same row,
-        `=` for label/value, `@` for color (blue/red/grey/primary).
-        Example: "confirm=yes@blue, cancel=no@red | more=next"
+        按钮的简化格式，无需写 JSON。用 `|` 分隔行，`,` 分隔同一行的按钮，`=` 分隔标签和值，`@` 指定颜色（blue/red/grey/primary）。
+        示例："确认=yes@blue, 取消=no@red | 下一页=next"
+      selector:
+        text:
