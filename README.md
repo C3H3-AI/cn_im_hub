@@ -9,6 +9,26 @@ Aggregate common Chinese IM platforms into one Home Assistant integration.
 
 [![Open your Home Assistant instance and open AI HUB in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=ha-china&repository=ai_hub&category=integration)
 
+---
+
+## 🚀 与上游的差别 / Differences from Upstream
+
+本仓库 fork 自 [ha-china/cn_im_hub](https://github.com/ha-china/cn_im_hub)，在此基础上增加以下特有功能：
+
+| 功能 | 本仓库 | 上游 |
+|------|--------|------|
+| **按通道配置对话代理** | ✅ 每个通道可独立选择不同的 `agent_id` | ❌ 仅支持单一全局 `agent_id` |
+| **飞书全量卡片回复** | ✅ AI 回复全部以飞书卡片展示 | ❌ 仅长内容自动转卡片 |
+| **智能卡片路由** | ✅ `from_ai` 标记路由，AI 与非 AI 回调互不干扰 | ❌ 无此功能 |
+| **WebSocket + Webhook 双重回调** | ✅ 飞书长连接与 HTTP 端点均支持卡片回调 | ❌ 无此功能 |
+| **回调加密验证** | ✅ 可选 `verification_token` 校验飞书签名 | ❌ 无此功能 |
+| **`card_json` 参数** | ✅ `send_message` 支持传入卡片 JSON | ❌ 无此参数 |
+| **MIT License** | ✅ 已添加 | ❌ 原仓库无 LICENSE |
+
+> 💡 **保持同步**：本仓库定期合并上游更新，确保基础功能与上游一致。
+
+---
+
 ## 文档 / Docs
 
 - 中文配置指南：[`CONFIG.zh-CN.md`](CONFIG.zh-CN.md)
