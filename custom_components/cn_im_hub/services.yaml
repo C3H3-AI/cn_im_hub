@@ -26,7 +26,7 @@ send_message:
               value: wechat/user_id
     target:
       required: false
-      description: 可选。不填写时将自动使用当前通道已选中的目标。当存在多个同类型通道实例时，填写目标地址也有助于路由到正确的实例。
+      description: 不填时自动使用 Select 实体中选中的目标。建议先去该通道的 Select 实体下拉选择目标，此处留空即可。
       selector:
         text:
     wechat_account_id:
