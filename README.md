@@ -24,6 +24,7 @@ Aggregate common Chinese IM platforms into one Home Assistant integration.
 | **回调加密验证** | ✅ 可选 `verification_token` 校验飞书签名 | ❌ 无此功能 |
 | **`card_json` 参数** | ✅ `send_message` 支持传入卡片 JSON | ❌ 无此参数 |
 | **简单格式卡片** | ✅ 支持 `card_content` + `card_buttons` 无需写 JSON | ❌ 无此功能 |
+| **卡片构建器** | ✅ Lovelace 自定义卡片，可视化构建，实时预览 | ❌ 无此功能 |
 | **MIT License** | ✅ 已添加 | ❌ 原仓库无 LICENSE |
 
 > 💡 **保持同步**：本仓库定期合并上游更新，确保基础功能与上游一致。
@@ -79,6 +80,31 @@ Aggregate common Chinese IM platforms into one Home Assistant integration.
   Feishu card + camera snapshot: when `card_json` and `camera_entity` are both provided, the camera snapshot is automatically captured and injected into the card.
 - 飞书卡片回调端点 `/api/cn_im_hub/feishu/card_callback`  
   Feishu card callback endpoint `/api/cn_im_hub/feishu/card_callback`.
+
+## 飞书卡片构建器 / Feishu Card Builder
+
+可视化构建飞书交互卡片，无需手写 JSON。支持标题、Markdown 正文、多行按钮，带实时预览。
+
+### 安装
+
+1. 将 [`www/cn-im-hub-card-builder.js`](www/cn-im-hub-card-builder.js) 复制到 HA 的 `config/www/` 目录下。
+2. 进入 HA → 设置 → 仪表盘 → 右上角三点 → 资源管理 → 添加资源 → `/local/cn-im-hub-card-builder.js`，类型选 JavaScript 模块。
+3. 在仪表盘编辑模式下点击添加卡片，搜索"飞书卡片构建器"。
+4. 填写卡片内容 → 点击 **复制 JSON** → 在开发者工具中粘贴到 `card_json` 字段。
+
+### 按钮格式说明
+
+| 字段 | 操作 |
+|------|------|
+| 标签 | 按钮上显示的文字 |
+| 值 | 按钮点击时传递的数据 |
+| 颜色 | 下拉选择（蓝/红/灰/强调/绿） |
+| 行 | [+ 添加行] 创建新行 |
+| 删除 | 每个按钮和行都有 ✕ 删除按钮 |
+
+### 效果
+
+左侧编辑面板，右侧实时预览卡片效果，复制 JSON 或直接调用 `send_message` 发送。
 
 ## 安装 / Installation
 
