@@ -25,6 +25,8 @@ Aggregate common Chinese IM platforms into one Home Assistant integration.
 
 ## Ultra 增强功能 / Ultra Features
 
+- **按通道配置对话代理**：每个通道（飞书/微信/企业微信/QQ/钉钉/小艺）可单独选择不同的对话代理，不配置时自动使用全局 `agent_id`  
+  **Per-channel agent override**: each provider channel can independently select a different conversation agent; falls back to the global `agent_id` when not configured.
 - **全量卡片回复**：AI 回复全部以飞书卡片形式展示，不再混杂纯文本  
   **Full card replies**: all AI responses are displayed as Feishu interactive cards.
 - **智能卡片路由**：Claw AI 发出的卡片按钮回执自动路由回 AI 处理，非 AI 来源的按钮回调触发标准 HA 事件，互不干扰  
@@ -38,10 +40,10 @@ Aggregate common Chinese IM platforms into one Home Assistant integration.
 
 - 一个 Hub 统一接入多个 IM 平台  
   One Hub can connect multiple IM providers.
-- 集成级只配置一次全局 `agent_id`  
-  Configure `agent_id` once at integration level.
-- 各平台通过 subentry 独立添加、独立更新  
-  Each provider is managed as an independent subentry.
+- 集成级配置全局 `agent_id`，各通道可单独覆盖  
+  Configure a global `agent_id` at integration level, with per-channel override support.
+- 各平台通过 subentry 独立添加、独立更新，并可选择各自的对话代理  
+  Each provider is managed as an independent subentry, with its own agent selection.
 - 个人微信支持绑定多个账号  
   Personal WeChat supports multiple bound accounts.
 - 统一的 `cn_im_hub.send_message` 服务  
@@ -65,12 +67,12 @@ Aggregate common Chinese IM platforms into one Home Assistant integration.
    Restart Home Assistant.
 3. 进入 `设置 -> 设备与服务 -> 添加集成`，搜索 `cn_im_hub Ultra`。  
    Go to `Settings -> Devices & Services -> Add Integration`, then search for `cn_im_hub Ultra`.
-4. 首次添加时选择一次全局 `agent_id`。  
-   Select the global `agent_id` once during first setup.
-5. 然后按平台添加子服务。后台配置步骤见 [`CONFIG.zh-CN.md`](CONFIG.zh-CN.md)。  
-   Then add provider subentries. Backend setup steps are documented in [`CONFIG.zh-CN.md`](CONFIG.zh-CN.md).
+4. 首次添加时选择全局 `agent_id`。  
+   Select the global `agent_id` during first setup.
+5. 然后按平台添加子服务，每个通道可选择自己的对话代理（不配置则使用全局 `agent_id`）。后台配置步骤见 [`CONFIG.zh-CN.md`](CONFIG.zh-CN.md)。  
+   Then add provider subentries — each channel can optionally select its own agent (falls back to global `agent_id`). Backend setup steps are documented in [`CONFIG.zh-CN.md`](CONFIG.zh-CN.md).
 
-[![Open your Home Assistant instance and open this repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=ha-china&repository=cn_im_hub&category=integration)
+[![Open your Home Assistant instance and open this repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=C3H3-AI&repository=cn_im_hub&category=integration)
 
 ## HA 服务 / HA Service
 
@@ -96,8 +98,8 @@ Aggregate common Chinese IM platforms into one Home Assistant integration.
 
 ## 对话方式 / Conversation Flow
 
-- 消息统一转到集成级配置的 `agent_id` 对应的 HA conversation agent。  
-  Messages are forwarded to the HA conversation agent bound to the integration-level `agent_id`.
+- 每个通道的消息默认转到全局 `agent_id` 对应的 HA conversation agent；若通道配置了 `channel_agent_id`，则使用该通道专属代理。  
+  Messages are forwarded to the global `agent_id` by default; if a channel has `channel_agent_id` configured, its dedicated agent is used instead.
 - 以自然语言对话为主。  
   Natural-language conversation is the main interaction style.
 - 飞书渠道支持实时进度推送（需在子服务配置中开启）。  
