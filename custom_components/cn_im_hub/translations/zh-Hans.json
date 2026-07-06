@@ -1,9 +1,9 @@
 {
-  "title": "即时通信合集",
+  "title": "即时通信合集 Ultra",
   "config": {
     "step": {
       "user": {
-        "title": "cn_im_hub Ultra",
+        "title": "即时通信合集 Ultra",
         "description": "先选择一个全局会话 Agent，后续通道在集成页面中逐个添加。"
       }
     },
@@ -76,6 +76,22 @@
         "gif_fps": {
           "name": "GIF 帧率",
           "description": "从摄像头快照生成动图时的每秒帧数。"
+        },
+        "card_json": {
+          "name": "卡片 JSON",
+          "description": "交互式卡片的 JSON 字符串（仅飞书）。"
+        },
+        "card_title": {
+          "name": "卡片标题",
+          "description": "卡片头部标题（仅飞书）。"
+        },
+        "card_content": {
+          "name": "卡片正文",
+          "description": "卡片正文文本或 Markdown 内容（仅飞书）。"
+        },
+        "card_buttons": {
+          "name": "卡片按钮",
+          "description": "按钮的简化格式（仅飞书），无需写 JSON。"
         }
       }
     }
@@ -93,7 +109,8 @@
           "data": {
             "app_id": "App ID",
             "app_secret": "App Secret",
-            "feishu_show_live_progress": "显示思考与工具进度"
+            "feishu_show_live_progress": "显示思考与工具进度",
+            "channel_agent_id": "对话代理（可选）"
           }
         }
       },
@@ -119,7 +136,8 @@
           "data": {
             "bot_id": "Bot ID",
             "secret": "Secret",
-            "wecom_show_live_progress": "显示思考与工具进度"
+            "wecom_show_live_progress": "显示思考与工具进度",
+            "channel_agent_id": "对话代理（可选）"
           }
         }
       },
@@ -145,7 +163,8 @@
           "data": {
             "qq_app_id": "App ID",
             "qq_client_secret": "App Secret",
-            "qq_show_live_progress": "显示思考与工具进度"
+            "qq_show_live_progress": "显示思考与工具进度",
+            "channel_agent_id": "对话代理（可选）"
           }
         }
       },
@@ -171,7 +190,8 @@
           "data": {
             "dingtalk_client_id": "Client ID",
             "dingtalk_client_secret": "Client Secret",
-            "dingtalk_show_live_progress": "显示思考与工具进度"
+            "dingtalk_show_live_progress": "显示思考与工具进度",
+            "channel_agent_id": "对话代理（可选）"
           }
         }
       },
@@ -194,7 +214,8 @@
         "reconfigure": {
           "title": "微信设置",
           "data": {
-            "wechat_show_live_progress": "显示思考与工具进度"
+            "wechat_show_live_progress": "显示思考与工具进度",
+            "channel_agent_id": "对话代理（可选）"
           }
         },
         "auth_wait": {
@@ -226,7 +247,8 @@
             "xiaoyi_ak": "Access Key",
             "xiaoyi_sk": "Secret Key",
             "xiaoyi_agent_id": "小艺 Agent ID",
-            "xiaoyi_show_live_progress": "显示思考与工具进度"
+            "xiaoyi_show_live_progress": "显示思考与工具进度",
+            "channel_agent_id": "对话代理（可选）"
           }
         }
       },
@@ -250,7 +272,8 @@
           "title": "添加自定义通道",
           "description": "通过 YAML 配置自定义通道（邮件/HTTP API）。\n\n系统会自动检测配置类型。",
           "data": {
-            "custom_yaml": "YAML 配置"
+            "custom_yaml": "YAML 配置",
+            "channel_agent_id": "对话代理（可选）"
           }
         }
       },

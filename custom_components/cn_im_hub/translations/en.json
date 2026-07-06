@@ -1,5 +1,5 @@
 {
-  "title": "CN IM Hub",
+  "title": "CN IM Hub Ultra",
   "config": {
     "step": {
       "user": {
@@ -76,6 +76,22 @@
         "gif_fps": {
           "name": "GIF FPS",
           "description": "Frames per second when generating an animated GIF from camera snapshots."
+        },
+        "card_json": {
+          "name": "Card JSON",
+          "description": "JSON string of an interactive card to send (Feishu only)."
+        },
+        "card_title": {
+          "name": "Card Title",
+          "description": "Card header title (Feishu only)."
+        },
+        "card_content": {
+          "name": "Card Content",
+          "description": "Card body text / markdown content (Feishu only)."
+        },
+        "card_buttons": {
+          "name": "Card Buttons",
+          "description": "Buttons in simple format without JSON (Feishu only)."
         }
       }
     }
@@ -93,7 +109,8 @@
           "data": {
             "app_id": "App ID",
             "app_secret": "App Secret",
-            "feishu_show_live_progress": "Show Thinking And Tool Progress"
+            "feishu_show_live_progress": "Show Thinking And Tool Progress",
+            "channel_agent_id": "Conversation Agent (optional)"
           }
         }
       },
@@ -119,7 +136,8 @@
           "data": {
             "bot_id": "Bot ID",
             "secret": "Secret",
-            "wecom_show_live_progress": "Show Thinking And Tool Progress"
+            "wecom_show_live_progress": "Show Thinking And Tool Progress",
+            "channel_agent_id": "Conversation Agent (optional)"
           }
         }
       },
@@ -145,7 +163,8 @@
           "data": {
             "qq_app_id": "App ID",
             "qq_client_secret": "App Secret",
-            "qq_show_live_progress": "Show Thinking And Tool Progress"
+            "qq_show_live_progress": "Show Thinking And Tool Progress",
+            "channel_agent_id": "Conversation Agent (optional)"
           }
         }
       },
@@ -171,7 +190,8 @@
           "data": {
             "dingtalk_client_id": "Client ID",
             "dingtalk_client_secret": "Client Secret",
-            "dingtalk_show_live_progress": "Show Thinking And Tool Progress"
+            "dingtalk_show_live_progress": "Show Thinking And Tool Progress",
+            "channel_agent_id": "Conversation Agent (optional)"
           }
         }
       },
@@ -194,7 +214,8 @@
         "reconfigure": {
           "title": "WeChat Settings",
           "data": {
-            "wechat_show_live_progress": "Show Thinking And Tool Progress"
+            "wechat_show_live_progress": "Show Thinking And Tool Progress",
+            "channel_agent_id": "Conversation Agent (optional)"
           }
         },
         "auth_wait": {
@@ -226,7 +247,8 @@
             "xiaoyi_ak": "Access Key",
             "xiaoyi_sk": "Secret Key",
             "xiaoyi_agent_id": "XiaoYi Agent ID",
-            "xiaoyi_show_live_progress": "Show Thinking And Tool Progress"
+            "xiaoyi_show_live_progress": "Show Thinking And Tool Progress",
+            "channel_agent_id": "Conversation Agent (optional)"
           }
         }
       },
@@ -250,7 +272,8 @@
           "title": "Add Custom Channel",
           "description": "Configure custom IM channels (e.g., Telegram, Discord) via YAML.\n\nRefer to the example configuration and fill in your channel details.",
           "data": {
-            "custom_yaml": "YAML Configuration"
+            "custom_yaml": "YAML Configuration",
+            "channel_agent_id": "Conversation Agent (optional)"
           }
         }
       },
