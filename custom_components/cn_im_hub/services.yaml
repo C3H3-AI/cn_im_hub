@@ -126,26 +126,26 @@ send_message:
           max: 10
     card_json:
       required: false
-      description: 交互式卡片的 JSON 字符串。填写此项时会忽略其他消息字段。
+      description: 交互式卡片的 JSON 字符串（仅飞书）。填写此项时会忽略其他消息字段。
       selector:
         text:
     card_title:
       required: false
       description: >
-        卡片头部标题。与 card_content/card_buttons 搭配使用，不填写时默认显示 "Claw Assistant"。
+        卡片头部标题（仅飞书）。与 card_content/card_buttons 搭配使用，不填写时默认显示 "Claw Assistant"。
       selector:
         text:
     card_content:
       required: false
       description: >
-        卡片正文文本或 Markdown 内容。与 card_buttons 配合使用可替代手写 JSON。
+        卡片正文文本或 Markdown 内容（仅飞书）。与 card_buttons 配合使用可替代手写 JSON。
       selector:
         text:
           multiline: true
     card_buttons:
       required: false
       description: >
-        按钮的简化格式，无需写 JSON。用 `|` 分隔行，`,` 分隔同一行的按钮，`=` 分隔标签和值，`@` 指定颜色（blue/red/grey/primary）。
+        按钮的简化格式（仅飞书），无需写 JSON。用 `|` 分隔行，`,` 分隔同一行的按钮，`=` 分隔标签和值，`@` 指定颜色（blue/red/grey/primary）。
         示例："确认=yes@blue, 取消=no@red | 下一页=next"
       selector:
         text:
