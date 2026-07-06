@@ -88,6 +88,7 @@ DEFAULT_GIF_DURATION: Final = 3
 DEFAULT_FEISHU_TARGET_TYPE: Final = "chat_id"
 
 CHANNEL_FEISHU_CHAT_ID: Final = "feishu/chat_id"
+CHANNEL_FEISHU_OPEN_ID: Final = "feishu/open_id"
 CHANNEL_WECOM_CHATID: Final = "wecom/chatid"
 CHANNEL_QQ_USER: Final = "qq/user"
 CHANNEL_QQ_GROUP: Final = "qq/group"
@@ -98,6 +99,7 @@ CHANNEL_WECHAT_USER_ID: Final = "wechat/user_id"
 
 CHANNEL_OPTIONS: Final = (
     CHANNEL_FEISHU_CHAT_ID,
+    CHANNEL_FEISHU_OPEN_ID,
     CHANNEL_WECOM_CHATID,
     CHANNEL_QQ_USER,
     CHANNEL_QQ_GROUP,

@@ -9,6 +9,7 @@ from ..models import HubRuntime, ProviderRuntime
 
 CHANNEL_MAP: dict[str, tuple[str, str]] = {
     "feishu/chat_id": ("feishu", "chat_id"),
+    "feishu/open_id": ("feishu", "open_id"),
     "wecom/chatid": ("wecom", "chatid"),
     "qq/user": ("qq", "user"),
     "qq/group": ("qq", "group"),
