@@ -79,6 +79,9 @@ ATTR_RECORD_DURATION: Final = "record_duration"
 ATTR_LOOKBACK: Final = "lookback"
 ATTR_GIF_FPS: Final = "gif_fps"
 ATTR_CARD_JSON: Final = "card_json"
+ATTR_CARD_TITLE: Final = "card_title"
+ATTR_CARD_CONTENT: Final = "card_content"
+ATTR_CARD_BUTTONS: Final = "card_buttons"
 DEFAULT_VIDEO_RECORD_DURATION: Final = 10
 DEFAULT_GIF_DURATION: Final = 3
 

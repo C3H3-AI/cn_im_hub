@@ -12,7 +12,10 @@ import voluptuous as vol
 from ..const import (
     ATTR_APPROVAL_ID,
     ATTR_CAMERA_ENTITY,
+    ATTR_CARD_BUTTONS,
+    ATTR_CARD_CONTENT,
     ATTR_CARD_JSON,
+    ATTR_CARD_TITLE,
     ATTR_CHANNEL,
     ATTR_FILE_NAME,
     ATTR_FILE_PATH,
@@ -73,6 +76,9 @@ SERVICE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_LOOKBACK, default=0): vol.Coerce(int),
         vol.Optional(ATTR_GIF_FPS, default=2): vol.Coerce(int),
         vol.Optional(ATTR_CARD_JSON, default=""): cv.string,
+        vol.Optional(ATTR_CARD_TITLE, default=""): cv.string,
+        vol.Optional(ATTR_CARD_CONTENT, default=""): cv.string,
+        vol.Optional(ATTR_CARD_BUTTONS, default=""): cv.string,
     }
 )
 
@@ -122,6 +128,9 @@ def _extract_call_data(call: ServiceCall) -> dict[str, Any]:
         "gif_fps": int(d.get(ATTR_GIF_FPS, 2) or 2),
         "wechat_account_id": _s(ATTR_WECHAT_ACCOUNT_ID),
         "card_json": _s(ATTR_CARD_JSON),
+        "card_title": _s(ATTR_CARD_TITLE),
+        "card_content": _s(ATTR_CARD_CONTENT),
+        "card_buttons": _s(ATTR_CARD_BUTTONS),
     }
 
 
@@ -135,6 +144,39 @@ async def _handle_card(hass, provider, requested, p, resolved_target, target_typ
             if image and image.content:
                 from ..providers.feishu import async_inject_camera_snapshot
                 await async_inject_camera_snapshot(hass, card, image.content, provider.client)
+    await provider.send_card(resolved_target, card, target_type)
+
+
+async def _handle_card_simple(hass, provider, requested, p, resolved_target, target_type):
+    from ..media.card import parse_card_source
+    from ..providers.feishu.card import build_feishu_card, build_response_card
+
+    content = p["card_content"]
+    buttons = p["card_buttons"]
+
+    if content or buttons:
+        source = content.strip()
+        if buttons:
+            source = f"{source} | {buttons}" if source else buttons
+        spec = parse_card_source(source)
+        if spec is not None:
+            card = build_feishu_card(spec, title=p["card_title"])
+        elif content:
+            card = build_response_card(content, title=p["card_title"])
+        else:
+            return
+    else:
+        return
+
+    if p["camera_entity"] and requested == "feishu":
+        resolved = await async_resolve_camera_entity(hass, p["camera_entity"])
+        if resolved is not None:
+            from homeassistant.components.camera import async_get_image
+            image = await async_get_image(hass, resolved)
+            if image and image.content:
+                from ..providers.feishu import async_inject_camera_snapshot
+                await async_inject_camera_snapshot(hass, card, image.content, provider.client)
+
     await provider.send_card(resolved_target, card, target_type)
 
 
@@ -195,7 +237,7 @@ async def _handle_file(hass, provider, requested, p, resolved_target, target_typ
 
 async def _handle_send_message(hass: HomeAssistant, call: ServiceCall) -> None:
     p = _extract_call_data(call)
-    has_content = p["message"] or p["camera_entity"] or p["file_path"] or p["file_url"] or p["tts_text"] or p["card_json"]
+    has_content = p["message"] or p["camera_entity"] or p["file_path"] or p["file_url"] or p["tts_text"] or p["card_json"] or p["card_content"] or p["card_buttons"]
     if not has_content:
         return
 
@@ -220,6 +262,7 @@ async def _handle_send_message(hass: HomeAssistant, call: ServiceCall) -> None:
 
     dispatch: list[tuple[bool, Any]] = [
         (bool(p["card_json"]), lambda: _handle_card(hass, provider, requested, p, resolved_target, target_type)),
+        (bool(p["card_content"] or p["card_buttons"]), lambda: _handle_card_simple(hass, provider, requested, p, resolved_target, target_type)),
         (bool(p["approval_id"]), lambda: _dispatch_approval(provider, requested, p, resolved_target, target_type)),
         (bool(p["tts_text"]), lambda: _dispatch_tts(provider, requested, p, resolved_target, target_type)),
         (bool(p["camera_entity"]), lambda: _handle_camera(hass, provider, requested, p, resolved_target, target_type)),

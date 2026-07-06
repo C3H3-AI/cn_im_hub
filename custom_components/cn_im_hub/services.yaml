@@ -129,3 +129,23 @@ send_message:
       description: JSON string of an interactive card to send. When provided, other message fields are ignored.
       selector:
         text:
+    card_title:
+      required: false
+      description: >
+        Card header title. Defaults to "Claw Assistant" when omitted. Used with card_content/card_buttons.
+      selector:
+        text:
+    card_content:
+      required: false
+      description: >
+        Card body text / markdown content. Used together with card_buttons for simple card
+        building without writing JSON.
+      selector:
+        text:
+          multiline: true
+    card_buttons:
+      required: false
+      description: >
+        Buttons in simple format. Use `|` to separate rows, `,` for buttons in same row,
+        `=` for label/value, `@` for color (blue/red/grey/primary).
+        Example: "confirm=yes@blue, cancel=no@red | more=next"

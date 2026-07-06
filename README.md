@@ -23,6 +23,7 @@ Aggregate common Chinese IM platforms into one Home Assistant integration.
 | **WebSocket + Webhook 双重回调** | ✅ 飞书长连接与 HTTP 端点均支持卡片回调 | ❌ 无此功能 |
 | **回调加密验证** | ✅ 可选 `verification_token` 校验飞书签名 | ❌ 无此功能 |
 | **`card_json` 参数** | ✅ `send_message` 支持传入卡片 JSON | ❌ 无此参数 |
+| **简单格式卡片** | ✅ 支持 `card_content` + `card_buttons` 无需写 JSON | ❌ 无此功能 |
 | **MIT License** | ✅ 已添加 | ❌ 原仓库无 LICENSE |
 
 > 💡 **保持同步**：本仓库定期合并上游更新，确保基础功能与上游一致。
@@ -103,6 +104,9 @@ Aggregate common Chinese IM platforms into one Home Assistant integration.
   - `message`
   - `camera_entity`
   - `card_json`（飞书卡片 JSON，与 `camera_entity` 组合可自动嵌入截图） / Feishu card JSON; combined with `camera_entity` auto-injects snapshot
+  - `card_title`（卡片标题，与 card_content/card_buttons 搭配使用） / Card header title, used with card_content/card_buttons
+  - `card_content`（卡片正文，替代手写 JSON 的可视化方式） / Card body text, a visual alternative to writing JSON
+  - `card_buttons`（卡片按钮，简单格式，无需 JSON。`|` 分行，`,` 分按钮，`=` 分标签/值，`@` 指定颜色。例：`确认=yes@blue, 取消=no@red | 下一页=next`） / Buttons in simple format without JSON
   - `wechat_account_id`（仅多微信账号时可选） / optional for multi-WeChat routing
 
 ## 目标地址格式 / Target Routing
