@@ -83,9 +83,12 @@ def _mp3_to_silk(mp3_bytes: bytes) -> tuple[bytes, int]:
     import tempfile
     import pilk
 
-    mp3_path = tempfile.mktemp(suffix=".mp3")
-    pcm_path = tempfile.mktemp(suffix=".pcm")
-    silk_path = tempfile.mktemp(suffix=".silk")
+    fd, mp3_path = tempfile.mkstemp(suffix=".mp3")
+    os.close(fd)
+    fd, pcm_path = tempfile.mkstemp(suffix=".pcm")
+    os.close(fd)
+    fd, silk_path = tempfile.mkstemp(suffix=".silk")
+    os.close(fd)
     try:
         with open(mp3_path, "wb") as f:
             f.write(mp3_bytes)

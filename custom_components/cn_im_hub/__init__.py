@@ -97,9 +97,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from .core.tmp_cleanup import async_setup_tmp_cleanup
     await async_setup_tmp_cleanup(hass)
 
-    from .providers.feishu import FeishuCardCallbackView
-    hass.http.register_view(FeishuCardCallbackView(hass))
-
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
 

@@ -37,7 +37,6 @@ from .prompt import build_feishu_prompt
 from ...models import ProviderRuntime
 from ..base import ProviderSpec
 from .api import FeishuApiClient, async_inject_camera_snapshot
-from .webhook import FeishuCardCallbackView
 from .card import build_feishu_card, build_response_card, mark_claw
 from .ws import FeishuWsClient
 

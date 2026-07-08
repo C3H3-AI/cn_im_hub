@@ -180,7 +180,7 @@ class FeishuWsClient:
             return
         action = event.get("action") or {}
         operator = event.get("operator") or {}
-        value = action.get("value", {})
+        value = _decode_action_value(action.get("value", {}))
         # Non-AI card actions: fire bus event for automation processing
         if not (isinstance(value, dict) and value.get("from_ai")):
             self._hass.loop.call_soon_threadsafe(
@@ -227,6 +227,20 @@ def _extract_text(content: str) -> str:
     except json.JSONDecodeError:
         return content.strip()
     return str(payload.get("text", "")).strip() if isinstance(payload, dict) else ""
+
+
+def _decode_action_value(value: object) -> object:
+    """飞书卡片 action.value 可能是 dict 或 JSON 字符串，统一解码。
+
+    字符串尝试 JSON 解析，失败或非字符串则原样返回。确保 from_ai 等字段
+    在 value 为字符串化 JSON 时仍能正确读取。
+    """
+    if not isinstance(value, str):
+        return value
+    try:
+        return json.loads(value)
+    except (json.JSONDecodeError, TypeError):
+        return {}
 
 
 def _log_future_exception(future: asyncio.Future) -> None:
