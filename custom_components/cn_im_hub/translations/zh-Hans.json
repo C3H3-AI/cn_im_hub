@@ -386,8 +386,7 @@
         "cannot_connect": "Agent 邮箱配置验证失败（token 无效或网络不可达）。",
         "auth_not_confirmed": "未检测到授权。请用微信扫码并在页面确认后再点提交。"
       },
-      "entry_type": "腾讯 Agent 邮箱通道",
-      "channel_title": "腾讯 Agent 邮箱"
+      "entry_type": "腾讯 Agent 邮箱通道"
     }
   }
 }

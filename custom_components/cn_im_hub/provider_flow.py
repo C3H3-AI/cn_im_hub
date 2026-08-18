@@ -27,16 +27,10 @@ _MAX_INSTANCES_PER_PROVIDER = 3
 
 
 def _load_channel_titles(lang: str) -> dict[str, str]:
-    if lang in _TITLE_CACHE:
-        return _TITLE_CACHE[lang]
-    for candidate in (lang, "en"):
-        path = _TRANSLATIONS_DIR / f"{candidate}.json"
-        if path.is_file():
-            data = json.loads(path.read_text(encoding="utf-8"))
-            titles = {k: v.get("channel_title", k) for k, v in data.get("config_subentries", {}).items()}
-            _TITLE_CACHE[lang] = titles
-            return titles
-    return {}
+    """Channel default titles from const (hassfest forbids custom translation keys)."""
+    from .const import PROVIDER_TITLES
+
+    return dict(PROVIDER_TITLES)
 
 
 def _next_title(flow: ConfigSubentryFlow, spec: ProviderSpec) -> str:

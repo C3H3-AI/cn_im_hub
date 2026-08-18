@@ -386,8 +386,7 @@
         "cannot_connect": "Agent Mail config validation failed (invalid token or network).",
         "auth_not_confirmed": "Authorization not confirmed. Scan with WeChat, confirm on the page, then submit."
       },
-      "entry_type": "Tencent Agent Mail Channel",
-      "channel_title": "Tencent Agent Mail"
+      "entry_type": "Tencent Agent Mail Channel"
     }
   }
 }

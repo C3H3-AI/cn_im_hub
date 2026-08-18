@@ -25,6 +25,18 @@ PROVIDERS: Final = (
     PROVIDER_AGENT_MAIL,
 )
 
+# 渠道默认标题（subentry 创建默认名称；不依赖 translations，避免 hassfest 自定义键校验）
+PROVIDER_TITLES: Final = {
+    PROVIDER_WECOM: "企业微信",
+    PROVIDER_WECHAT: "微信",
+    PROVIDER_QQ: "QQ",
+    PROVIDER_FEISHU: "飞书",
+    PROVIDER_DINGTALK: "钉钉",
+    PROVIDER_XIAOYI: "小艺",
+    PROVIDER_CUSTOM: "Custom",
+    PROVIDER_AGENT_MAIL: "腾讯 Agent 邮箱",
+}
+
 CONF_AGENT_MAIL_ACCESS_TOKEN: Final = "access_token"
 CONF_AGENT_MAIL_REFRESH_TOKEN: Final = "refresh_token"
 CONF_AGENT_MAIL_ALIAS_ID: Final = "alias_id"
