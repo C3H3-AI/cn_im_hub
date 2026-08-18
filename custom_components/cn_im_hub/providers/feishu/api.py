@@ -84,6 +84,11 @@ class FeishuApiClient:
         content = json.dumps(card, ensure_ascii=False)
         await self._async_send_message(receive_id, "interactive", content, receive_id_type)
 
+    async def async_send_card_message_with_id(self, *, receive_id: str, card: dict[str, Any], receive_id_type: str = DEFAULT_FEISHU_TARGET_TYPE) -> str:
+        """Send an interactive card and return the message_id."""
+        content = json.dumps(card, ensure_ascii=False)
+        return await self._async_send_message_with_id(receive_id, "interactive", content, receive_id_type)
+
     async def async_upload_image(self, image_data: bytes, *, strict: bool = False) -> str | None:
         token = await self.async_get_tenant_access_token()
         form = aiohttp.FormData()
@@ -183,6 +188,23 @@ class FeishuApiClient:
         content = json.dumps({"text": text[:_REPLY_MAX_LENGTH]}, ensure_ascii=False)
         return await self._async_send_message_with_id(receive_id, "text", content, receive_id_type)
 
+    async def async_update_card_message(self, *, message_id: str, card: dict) -> None:
+        """Update an interactive card message by message_id."""
+        token = await self.async_get_tenant_access_token()
+        content = json.dumps(card, ensure_ascii=False)
+        async with asyncio.timeout(15):
+            response = await self._session.patch(
+                f"https://open.feishu.cn/open-apis/im/v1/messages/{message_id}",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json; charset=utf-8",
+                },
+                json={"msg_type": "interactive", "content": content},
+            )
+        data = await async_read_json(response)
+        if response.status != 200 or data.get("code") != 0:
+            raise RuntimeError(f"update card failed: {data.get('msg', response.reason)}")
+
     async def async_update_text_message(self, *, message_id: str, text: str) -> None:
         token = await self.async_get_tenant_access_token()
         content = json.dumps({"text": text[:_REPLY_MAX_LENGTH]}, ensure_ascii=False)
@@ -198,6 +220,69 @@ class FeishuApiClient:
         data = await async_read_json(response)
         if response.status != 200 or data.get("code") != 0:
             raise RuntimeError(f"update text failed: {data.get('msg', response.reason)}")
+
+    async def async_get_message(self, message_id: str) -> dict[str, Any] | None:
+        """Get a specific message by message_id."""
+        token = await self.async_get_tenant_access_token()
+        async with asyncio.timeout(15):
+            response = await self._session.get(
+                f"https://open.feishu.cn/open-apis/im/v1/messages/{message_id}",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        data = await async_read_json(response)
+        if response.status != 200 or data.get("code") != 0:
+            _LOGGER.warning("Failed to get message %s: %s", message_id, data.get("msg", ""))
+            return None
+        item = data.get("data") or {}
+        return item.get("items", [None])[0] if isinstance(item, dict) else None
+
+    async def async_download_image(self, image_key: str) -> bytes | None:
+        """Download image from Feishu by image_key."""
+        token = await self.async_get_tenant_access_token()
+        async with asyncio.timeout(30):
+            response = await self._session.get(
+                f"https://open.feishu.cn/open-apis/im/v1/images/{image_key}",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        if response.status != 200:
+            _LOGGER.warning("Failed to download image %s: %d", image_key, response.status)
+            return None
+        return await response.read()
+
+    async def async_download_file(self, file_key: str) -> tuple[bytes, str] | None:
+        """Download file from Feishu by file_key. Returns (data, filename)."""
+        token = await self.async_get_tenant_access_token()
+        async with asyncio.timeout(30):
+            response = await self._session.get(
+                f"https://open.feishu.cn/open-apis/im/v1/files/{file_key}",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        if response.status != 200:
+            _LOGGER.warning("Failed to download file %s: %d", file_key, response.status)
+            return None
+        data = await response.read()
+        file_name = "file"
+        content_disposition = response.headers.get("Content-Disposition", "")
+        if "filename=" in content_disposition:
+            file_name = content_disposition.split("filename=")[-1].strip(' "')
+        return data, file_name
+
+    async def async_download_resource(
+        self, message_id: str, file_key: str, file_type: str = "file"
+    ) -> bytes | None:
+        """Download resource (audio/media attachment) from a message."""
+        token = await self.async_get_tenant_access_token()
+        url = f"https://open.feishu.cn/open-apis/im/v1/messages/{message_id}/resources/{file_key}"
+        async with asyncio.timeout(30):
+            response = await self._session.get(
+                url,
+                params={"type": file_type},
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        if response.status != 200:
+            _LOGGER.warning("Failed to download resource %s: %d", file_key, response.status)
+            return None
+        return await response.read()
 
 
 async def async_inject_camera_snapshot(hass: HomeAssistant, card: dict[str, Any], image_data: bytes, ws_client: Any) -> bool:

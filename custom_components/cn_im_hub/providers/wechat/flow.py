@@ -10,7 +10,7 @@ from homeassistant.config_entries import ConfigSubentryFlow, SubentryFlowResult
 from homeassistant.helpers.storage import Store
 
 from ...const import CONF_WECHAT_ACCOUNT_ID, CONF_WECHAT_BASE_URL, CONF_WECHAT_TOKEN, CONF_WECHAT_USER_ID, PROVIDER_WECHAT, WECHAT_DEFAULT_BASE_URL
-from ...provider_flow import _load_channel_titles
+from ...provider_flow import _existing_count, _load_channel_titles
 from .auth import async_start_weixin_login, async_wait_weixin_login
 
 _LOGGER = logging.getLogger(__name__)
@@ -44,7 +44,9 @@ class WeixinProviderSubentryFlow(ConfigSubentryFlow):
         if user_input is None:
             return self.async_show_form(
                 step_id="auth_wait",
-                data_schema=vol.Schema({}),
+                data_schema=vol.Schema(
+                    {vol.Optional("title", default=self._default_title()): str}
+                ),
                 description_placeholders=placeholders,
             )
         try:
@@ -69,16 +71,17 @@ class WeixinProviderSubentryFlow(ConfigSubentryFlow):
             CONF_WECHAT_BASE_URL: result.base_url or str(self._current.get(CONF_WECHAT_BASE_URL, WECHAT_DEFAULT_BASE_URL)),
         }
         await self._async_update_account_index(data)
+        title = str(user_input.get("title") or self._default_title()).strip() or self._default_title()
         return self.async_create_entry(
-            title=self._build_entry_title(self.hass.config.language),
+            title=title,
             data=data,
         )
 
-    @staticmethod
-    def _build_entry_title(language: str) -> str:
-        titles = _load_channel_titles(language)
-        return titles.get(PROVIDER_WECHAT, PROVIDER_WECHAT)
-
+    def _default_title(self) -> str:
+        titles = _load_channel_titles(self.hass.config.language)
+        base = titles.get(PROVIDER_WECHAT, PROVIDER_WECHAT)
+        n = _existing_count(self, getattr(self, "_provider_spec", None))
+        return base if n == 0 else f"{base} #{n + 1}"
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
@@ -90,6 +93,7 @@ class WeixinProviderSubentryFlow(ConfigSubentryFlow):
             new_data = {
                 **current_data,
                 _CONF_WECHAT_SHOW_LIVE_PROGRESS: user_input.get(_CONF_WECHAT_SHOW_LIVE_PROGRESS, False),
+                "channel_agent_id": str(user_input.get("channel_agent_id", "") or ""),
             }
             entry = self._get_entry()
             result = self.async_update_and_abort(entry, subentry, data=new_data)
@@ -100,12 +104,17 @@ class WeixinProviderSubentryFlow(ConfigSubentryFlow):
             self.hass.async_create_task(_reload(), "cn_im_hub_wechat_reload")
             return result
 
+        from homeassistant.helpers import selector
+
         schema = vol.Schema(
             {
                 vol.Optional(
                     _CONF_WECHAT_SHOW_LIVE_PROGRESS,
                     default=current_data.get(_CONF_WECHAT_SHOW_LIVE_PROGRESS, False),
                 ): bool,
+                vol.Optional(
+                    "channel_agent_id", default=current_data.get("channel_agent_id", "")
+                ): selector.ConversationAgentSelector({"language": self.hass.config.language}),
             }
         )
         return self.async_show_form(

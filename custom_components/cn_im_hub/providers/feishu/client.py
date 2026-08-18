@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
+import mimetypes
+from pathlib import Path
 from typing import Any
+import uuid
 
 from homeassistant.core import HomeAssistant, callback
 import voluptuous as vol
 
 EVENT_LIVE_PROGRESS = "ha_crack_live_progress"
-_LIVE_PROGRESS_SEND_INTERVAL_SECONDS = 2.0
 
 from ...core.command import execute_command, parse_command
 from ...core.known_targets import async_get_tracker
@@ -21,7 +24,7 @@ from ...const import (
     DOMAIN,
     PROVIDER_FEISHU,
 )
-from ...media.card import CardSpec, parse_card_source
+from ...media.card import parse_card_source
 from ...media.rich_media import (
     CardSegment,
     FileSegment,
@@ -36,11 +39,21 @@ from ...media.rich_media import (
 from .prompt import build_feishu_prompt
 from ...models import ProviderRuntime
 from ..base import ProviderSpec
-from .api import FeishuApiClient, async_inject_camera_snapshot
-from .card import build_feishu_card, build_response_card, mark_claw
+from .flow import FeishuScanSubentryFlow
+from .api import FeishuApiClient
+from .card import (
+    build_feishu_card,
+    build_final_card,
+    build_paginated_cards,
+    build_progress_card,
+    build_response_card,
+    mark_claw,
+)
 from .ws import FeishuWsClient
 
 _LOGGER = logging.getLogger(__name__)
+
+_TMP_DIR = "cn_im_hub"
 
 
 async def async_validate_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
@@ -96,7 +109,7 @@ def _format_live_progress(payload: dict[str, Any]) -> str:
 def _message_handler_factory(hass, api, tracker, agent_id, show_live_progress: bool = False):
     async def _run_live_progress_bridge(conversation_id: str, receive_id: str, receive_type: str) -> None:
         if not show_live_progress:
-            await asyncio.Future()
+            return  # No progress needed, task finishes immediately
 
         queue: asyncio.Queue[str] = asyncio.Queue()
 
@@ -112,11 +125,11 @@ def _message_handler_factory(hass, api, tracker, agent_id, show_live_progress: b
         unsub = hass.bus.async_listen(EVENT_LIVE_PROGRESS, _listener)
         last_sent = ""
         pending_tasks: list[asyncio.Task] = []
-        
+
         async def _fire_and_forget(msg: str) -> None:
             with contextlib.suppress(Exception):
                 await _reply(api, receive_id, receive_type, msg)
-        
+
         try:
             while True:
                 text = await queue.get()
@@ -126,6 +139,12 @@ def _message_handler_factory(hass, api, tracker, agent_id, show_live_progress: b
                 pending_tasks.append(task)
                 last_sent = text
         except asyncio.CancelledError:
+            while not queue.empty():
+                text = queue.get_nowait()
+                if text and text != last_sent:
+                    task = asyncio.create_task(_fire_and_forget(text))
+                    pending_tasks.append(task)
+                    last_sent = text
             if pending_tasks:
                 await asyncio.gather(*pending_tasks, return_exceptions=True)
         finally:
@@ -135,13 +154,42 @@ def _message_handler_factory(hass, api, tracker, agent_id, show_live_progress: b
         chat_id = message.get("chat_id", "")
         user_id = message.get("user_id", "")
         text = message.get("text", "").strip()
+        msg_type = message.get("msg_type", "")
+        raw_content = message.get("raw_content", "")
+        parent_id = message.get("parent_id", "")
+
         receive_id = chat_id or user_id
         receive_type = "chat_id" if chat_id else "open_id"
-        if not receive_id or not text:
+        if not receive_id:
             return
-        await tracker.async_record(provider=PROVIDER_FEISHU, target=receive_id, target_type=receive_type, display_name=user_id or chat_id)
+
+        # Record known target for future reference
+        await tracker.async_record(
+            provider=PROVIDER_FEISHU,
+            target=receive_id,
+            target_type=receive_type,
+            display_name=user_id or chat_id or receive_id,
+        )
+
+        # Process attachments (image, file, audio, media, sticker)
+        processed_text = text
+        if msg_type in ("image", "file", "audio", "media", "sticker") and raw_content:
+            attachment_tag = await _process_attachment(hass, api, raw_content, msg_type, message.get("message_id", ""))
+            if attachment_tag:
+                processed_text = (processed_text + "\n" + attachment_tag) if processed_text else attachment_tag
+
+        # Resolve reference/quote message if parent_id is present
+        if parent_id:
+            ref_text = await _resolve_reference(hass, api, parent_id)
+            if ref_text:
+                ref_block = f"[引用消息开始]\n{ref_text}\n[引用消息结束]"
+                processed_text = f"{ref_block}\n{processed_text}" if processed_text else ref_block
+
+        if not processed_text:
+            return
+
         try:
-            command = parse_command(text)
+            command = parse_command(processed_text)
         except ValueError as err:
             await _reply(api, receive_id, receive_type, f"Invalid command: {err}")
             return
@@ -172,12 +220,12 @@ def _message_handler_factory(hass, api, tracker, agent_id, show_live_progress: b
             return
         prefix_name, reply_body = extract_reply_prefix(reply)
         card_title = prefix_name or "Claw Assistant"
-        has_card = "[CARD:" in reply
         segments = parse_reply_segments(reply_body)
         for seg in segments:
             if isinstance(seg, TextSegment):
-                card = build_response_card(seg.text, title=card_title)
-                await _reply(api, receive_id, receive_type, seg.text, mark_claw(card))
+                cards = build_paginated_cards(seg.text, title=card_title)
+                for card in cards:
+                    await _reply(api, receive_id, receive_type, seg.text, mark_claw(card))
             elif isinstance(seg, ImageSegment):
                 try:
                     image_bytes = await _resolve_image(hass, seg.source)
@@ -259,6 +307,126 @@ def _message_handler_factory(hass, api, tracker, agent_id, show_live_progress: b
                     _LOGGER.warning("Feishu voice send failed: %s", err)
                     await _reply(api, receive_id, receive_type, seg.text)
     return _handle_message
+
+
+async def _process_attachment(
+    hass: HomeAssistant,
+    api: FeishuApiClient,
+    raw_content: str,
+    msg_type: str,
+    message_id: str,
+) -> str:
+    """Download Feishu attachment and return [ATTACHMENT] tag.
+
+    Returns empty string if download fails or type is unsupported.
+    """
+    try:
+        payload = json.loads(raw_content)
+    except json.JSONDecodeError:
+        return ""
+    if not isinstance(payload, dict):
+        return ""
+
+    if msg_type == "image":
+        image_key = str(payload.get("image_key") or "")
+        if not image_key:
+            return ""
+        image_bytes = await api.async_download_image(image_key)
+        if not image_bytes:
+            return ""
+        mime, path = await _save_attachment(hass, data=image_bytes, mime_hint="image/png", prefix="img")
+        return f"[ATTACHMENT:{mime}:{path}]"
+
+    if msg_type == "file":
+        file_key = str(payload.get("file_key") or "")
+        file_name = str(payload.get("file_name") or "file")
+        if not file_key:
+            return ""
+        result = await api.async_download_file(file_key)
+        if not result:
+            return ""
+        file_bytes, remote_name = result
+        name = remote_name or file_name
+        mime_hint = mimetypes.guess_type(name)[0] or "application/octet-stream"
+        mime, path = await _save_attachment(hass, data=file_bytes, mime_hint=mime_hint, prefix="file")
+        return f"[ATTACHMENT:{mime}:{path}]"
+
+    if msg_type == "audio":
+        file_key = str(payload.get("file_key") or "")
+        if not file_key or not message_id:
+            return ""
+        audio_bytes = await api.async_download_resource(message_id, file_key, file_type="file")
+        if not audio_bytes:
+            return ""
+        mime, path = await _save_attachment(hass, data=audio_bytes, mime_hint="audio/ogg", prefix="audio")
+        return f"[ATTACHMENT:{mime}:{path}]"
+
+    if msg_type == "media":
+        file_key = str(payload.get("file_key") or "")
+        file_name = str(payload.get("file_name") or "video.mp4")
+        if not file_key:
+            return ""
+        media_bytes = await api.async_download_file(file_key)
+        if media_bytes:
+            file_bytes, remote_name = media_bytes
+            name = remote_name or file_name
+            mime_hint = mimetypes.guess_type(name)[0] or "video/mp4"
+            mime, path = await _save_attachment(hass, data=file_bytes, mime_hint=mime_hint, prefix="video")
+            return f"[ATTACHMENT:{mime}:{path}]"
+        return ""
+
+    if msg_type == "sticker":
+        file_key = str(payload.get("file_key") or "")
+        if not file_key:
+            return ""
+        sticker_bytes = await api.async_download_file(file_key)
+        if sticker_bytes:
+            file_bytes, _ = sticker_bytes
+            mime, path = await _save_attachment(hass, data=file_bytes, mime_hint="image/png", prefix="sticker")
+            return f"[ATTACHMENT:{mime}:{path}]"
+        return ""
+
+    return ""
+
+
+async def _save_attachment(
+    hass: HomeAssistant,
+    data: bytes,
+    mime_hint: str,
+    prefix: str,
+) -> tuple[str, str]:
+    """Save attachment data to temp dir and return (mime, path)."""
+    tmp_dir = Path(hass.config.path(".storage", _TMP_DIR, "tmp"))
+    await hass.async_add_executor_job(tmp_dir.mkdir, True, True)  # exist_ok=True
+
+    # Determine file extension from mime hint
+    ext = mimetypes.guess_extension(mime_hint) or ".bin"
+    if ext == ".jpe":
+        ext = ".jpg"
+    elif ext == ".oga":
+        ext = ".ogg"
+
+    file_name = f"feishu_{prefix}_{uuid.uuid4().hex[:12]}{ext}"
+    file_path = str(tmp_dir / file_name)
+    await hass.async_add_executor_job(Path(file_path).write_bytes, data)
+    return mime_hint, file_path
+
+
+async def _resolve_reference(hass: HomeAssistant, api: FeishuApiClient, parent_id: str) -> str:
+    """Get the text content of a referenced message for quote context."""
+    try:
+        msg = await api.async_get_message(parent_id)
+        if not msg:
+            return ""
+        msg_type = str(msg.get("msg_type") or "")
+        content = str(msg.get("content") or "")
+        if not content:
+            return ""
+        from .ws import _extract_text
+        return _extract_text(content, msg_type)
+    except Exception as err:
+        _LOGGER.warning("Feishu reference resolve failed: %s", err)
+        return ""
 
 
 async def _resolve_media(hass: HomeAssistant, source: str) -> bytes | None:
@@ -379,4 +547,5 @@ PROVIDER_SPEC = ProviderSpec(
     validate_config=async_validate_config,
     setup_provider=async_setup_provider,
     allow_multiple=True,
+    flow_handler=FeishuScanSubentryFlow,
 )

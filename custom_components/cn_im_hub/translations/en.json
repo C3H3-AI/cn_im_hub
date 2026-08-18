@@ -94,6 +94,30 @@
           "description": "Buttons in simple format without JSON (Feishu only)."
         }
       }
+    },
+    "list_messages": {
+      "name": "List Messages",
+      "description": "List messages in the agent_mail mailbox (folder + pagination). Returns messages array."
+    },
+    "read_message": {
+      "name": "Read Message",
+      "description": "Read a full message (body, recipients, attachments)."
+    },
+    "search_messages": {
+      "name": "Search Messages",
+      "description": "Search messages by keyword. Returns messages array."
+    },
+    "reply_message": {
+      "name": "Reply Message",
+      "description": "Reply to a message (two-phase confirmation handled automatically)."
+    },
+    "forward_message": {
+      "name": "Forward Message",
+      "description": "Forward a message to other recipients (two-phase confirmation handled automatically)."
+    },
+    "delete_message": {
+      "name": "Delete Message",
+      "description": "Delete a message. Soft delete by default (trash 30 days); permanent=true removes forever."
     }
   },
   "config_subentries": {
@@ -112,15 +136,25 @@
             "feishu_show_live_progress": "Show Thinking And Tool Progress",
             "channel_agent_id": "Conversation Agent (optional)"
           }
+        },
+        "auth_wait": {
+          "title": "Scan with Feishu",
+          "description": "{qr_markdown}\n\nScan the QR above with the **Feishu** app to create/bind a bot, then click **Submit**.\n\nCan't scan? [Open the authorization page]({auth_url})　Code: `{user_code}`"
+        },
+        "reconfigure": {
+          "title": "Channel settings",
+          "description": "Keep existing credentials; click Submit to reload."
         }
       },
       "abort": {
         "already_configured": "Feishu channel is already configured.",
         "reconfigure_successful": "Feishu channel updated successfully.",
-        "max_instances_reached": "Maximum instances reached (3)."
+        "max_instances_reached": "Maximum instances reached (3).",
+        "cannot_connect": "Could not start the scan flow (network error)."
       },
       "error": {
-        "cannot_connect": "Failed to validate Feishu config."
+        "cannot_connect": "Failed to validate Feishu config.",
+        "auth_not_confirmed": "Authorization not confirmed. Scan and confirm before submitting."
       },
       "entry_type": "Feishu Channel"
     },
@@ -139,15 +173,25 @@
             "wecom_show_live_progress": "Show Thinking And Tool Progress",
             "channel_agent_id": "Conversation Agent (optional)"
           }
+        },
+        "auth_wait": {
+          "title": "Scan with WeCom",
+          "description": "{qr_markdown}\n\nScan the QR above with **WeCom** to create a smart bot, then click **Submit**.\n\nCan't scan? [Open the authorization page]({auth_url})"
+        },
+        "reconfigure": {
+          "title": "Channel settings",
+          "description": "Keep existing credentials; click Submit to reload."
         }
       },
       "abort": {
         "already_configured": "WeCom channel is already configured.",
         "reconfigure_successful": "WeCom channel updated successfully.",
-        "max_instances_reached": "Maximum instances reached (3)."
+        "max_instances_reached": "Maximum instances reached (3).",
+        "cannot_connect": "Could not start the scan flow (network error)."
       },
       "error": {
-        "cannot_connect": "Failed to validate WeCom config."
+        "cannot_connect": "Failed to validate WeCom config.",
+        "auth_not_confirmed": "Authorization not confirmed. Scan and confirm before submitting."
       },
       "entry_type": "WeCom Channel"
     },
@@ -166,15 +210,25 @@
             "qq_show_live_progress": "Show Thinking And Tool Progress",
             "channel_agent_id": "Conversation Agent (optional)"
           }
+        },
+        "auth_wait": {
+          "title": "Scan with QQ",
+          "description": "{qr_markdown}\n\nScan with the **QQ** app to bind the bot, then click **Submit**.\n\nCan't scan? [Open the bind page]({auth_url})"
+        },
+        "reconfigure": {
+          "title": "Channel settings",
+          "description": "Keep existing credentials; click Submit to reload."
         }
       },
       "abort": {
         "already_configured": "QQ channel is already configured.",
         "reconfigure_successful": "QQ channel updated successfully.",
-        "max_instances_reached": "Maximum instances reached (3)."
+        "max_instances_reached": "Maximum instances reached (3).",
+        "cannot_connect": "Could not start the scan flow (network error)."
       },
       "error": {
-        "cannot_connect": "Failed to validate QQ config."
+        "cannot_connect": "Failed to validate QQ config.",
+        "auth_not_confirmed": "Authorization not confirmed. Scan and confirm before submitting."
       },
       "entry_type": "QQ Channel"
     },
@@ -193,15 +247,25 @@
             "dingtalk_show_live_progress": "Show Thinking And Tool Progress",
             "channel_agent_id": "Conversation Agent (optional)"
           }
+        },
+        "auth_wait": {
+          "title": "Scan with DingTalk",
+          "description": "{qr_markdown}\n\nScan the QR above with the **DingTalk** app to create a bot, then click **Submit**.\n\nCan't scan? [Open the authorization page]({auth_url})　Code: `{user_code}`"
+        },
+        "reconfigure": {
+          "title": "Channel settings",
+          "description": "Keep existing credentials; click Submit to reload."
         }
       },
       "abort": {
         "already_configured": "DingTalk channel is already configured.",
         "reconfigure_successful": "DingTalk channel updated successfully.",
-        "max_instances_reached": "Maximum instances reached (3)."
+        "max_instances_reached": "Maximum instances reached (3).",
+        "cannot_connect": "Could not start the scan flow (network error)."
       },
       "error": {
-        "cannot_connect": "Failed to validate DingTalk config."
+        "cannot_connect": "Failed to validate DingTalk config.",
+        "auth_not_confirmed": "Authorization not confirmed. Scan and confirm before submitting."
       },
       "entry_type": "DingTalk Channel"
     },
@@ -286,6 +350,44 @@
         "cannot_connect": "Failed to validate YAML config."
       },
       "entry_type": "Custom Channel"
+    },
+    "agent_mail": {
+      "initiate_flow": {
+        "user": "Add Tencent Agent Mail",
+        "reconfigure": "Agent Mail settings"
+      },
+      "step": {
+        "set_options": {
+          "title": "Add Tencent Agent Mail",
+          "description": "Run `agently-cli auth login` in a terminal and authorize with WeChat scan, then paste the token below.\n\nAccess Token is required; Refresh Token and Alias ID are optional (auto-resolved).",
+          "data": {
+            "access_token": "Access Token",
+            "refresh_token": "Refresh Token (optional)",
+            "alias_id": "Alias ID (optional, auto-resolved)",
+            "channel_agent_id": "Conversation agent (optional)"
+          }
+        },
+        "auth_wait": {
+          "title": "Scan with WeChat",
+          "description": "{qr_markdown}\n\nScan the QR code above with **WeChat**, then click **Submit**. \n\nCan't scan? [Open the authorization page]({auth_url})　Code: `{input_code}`"
+        },
+        "reconfigure": {
+          "title": "Agent Mail settings",
+          "description": "Select an optional conversation agent for this channel (used when the global agent is not desired)."
+        }
+      },
+      "abort": {
+        "already_configured": "Tencent Agent Mail channel already configured.",
+        "reconfigure_successful": "Tencent Agent Mail channel updated.",
+        "max_instances_reached": "Maximum instances reached (3).",
+        "cannot_connect": "Could not start the device flow (network error)."
+      },
+      "error": {
+        "cannot_connect": "Agent Mail config validation failed (invalid token or network).",
+        "auth_not_confirmed": "Authorization not confirmed. Scan with WeChat, confirm on the page, then submit."
+      },
+      "entry_type": "Tencent Agent Mail Channel",
+      "channel_title": "Tencent Agent Mail"
     }
   }
 }

@@ -26,6 +26,8 @@ send_message:
               value: dingtalk/group
             - label: 微信 / 用户
               value: wechat/user_id
+            - label: 腾讯 Agent 邮箱
+              value: agent_mail
     target:
       required: false
       description: 不填时自动使用 Select 实体中选中的目标。建议先去该通道的 Select 实体下拉选择目标，此处留空即可。
@@ -151,3 +153,128 @@ send_message:
         示例："确认=yes@blue, 取消=no@red | 下一页=next"
       selector:
         text:
+
+list_messages:
+  name: 列出邮件
+  description: 列出 agent_mail 邮箱中的邮件（支持文件夹、分页）。返回 messages 数组与 pagination。
+  fields:
+    limit:
+      required: false
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 50
+    folder:
+      required: false
+      default: inbox
+      selector:
+        select:
+          options:
+            - label: 收件箱
+              value: inbox
+            - label: 已发送
+              value: sent
+            - label: 回收站
+              value: trash
+            - label: 垃圾邮件
+              value: spam
+    cursor:
+      required: false
+      description: 翻页游标，取上一页返回的 pagination.next_cursor。
+      selector:
+        text:
+
+read_message:
+  name: 读取邮件
+  description: 读取一封邮件的完整内容（正文、收件人、附件）。
+  fields:
+    message_id:
+      required: true
+      selector:
+        text:
+
+search_messages:
+  name: 搜索邮件
+  description: 按关键词搜索邮件。返回 messages 数组。
+  fields:
+    query:
+      required: true
+      description: 搜索关键词。
+      selector:
+        text:
+    search_in:
+      required: false
+      default: SEARCH_IN_ALL
+      selector:
+        select:
+          options:
+            - label: 全部
+              value: SEARCH_IN_ALL
+            - label: 仅主题
+              value: SEARCH_IN_SUBJECT
+            - label: 仅正文
+              value: SEARCH_IN_CONTENT
+    limit:
+      required: false
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 50
+    cursor:
+      required: false
+      selector:
+        text:
+
+reply_message:
+  name: 回复邮件
+  description: 回复一封邮件（两步确认自动完成）。
+  fields:
+    message_id:
+      required: true
+      selector:
+        text:
+    message:
+      required: true
+      selector:
+        text:
+          multiline: true
+    reply_all:
+      required: false
+      default: false
+      selector:
+        boolean:
+
+forward_message:
+  name: 转发邮件
+  description: 转发一封邮件给其他收件人（两步确认自动完成）。
+  fields:
+    message_id:
+      required: true
+      selector:
+        text:
+    to:
+      required: true
+      description: 收件人邮箱，多个用逗号分隔。
+      selector:
+        text:
+    include_attachments:
+      required: false
+      default: false
+      selector:
+        boolean:
+
+delete_message:
+  name: 删除邮件
+  description: 删除邮件。默认软删（回收站，30 天保留），permanent=true 为永久删除。
+  fields:
+    message_id:
+      required: true
+      selector:
+        text:
+    permanent:
+      required: false
+      default: false
+      selector:
+        boolean:

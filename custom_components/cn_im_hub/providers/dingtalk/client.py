@@ -38,6 +38,7 @@ from ...media.rich_media import (
 )
 from ...models import ProviderRuntime
 from ..base import ProviderSpec
+from .flow import DingtalkScanSubentryFlow
 from .prompt import build_dingtalk_prompt
 
 _LOGGER = logging.getLogger(__name__)
@@ -757,4 +758,5 @@ PROVIDER_SPEC = ProviderSpec(
     validate_config=async_validate_config,
     setup_provider=async_setup_provider,
     allow_multiple=True,
+    flow_handler=DingtalkScanSubentryFlow,
 )

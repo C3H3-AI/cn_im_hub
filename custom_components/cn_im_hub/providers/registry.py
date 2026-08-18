@@ -5,6 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 
 from ..provider_flow import build_simple_provider_flow
+from .agent_mail import PROVIDER_SPEC as AGENT_MAIL_PROVIDER_SPEC
 from .base import ProviderSpec
 from .custom import PROVIDER_SPEC as CUSTOM_PROVIDER_SPEC
 from .dingtalk import PROVIDER_SPEC as DINGTALK_PROVIDER_SPEC
@@ -23,6 +24,7 @@ _PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
     DINGTALK_PROVIDER_SPEC,
     XIAOYI_PROVIDER_SPEC,
     CUSTOM_PROVIDER_SPEC,
+    AGENT_MAIL_PROVIDER_SPEC,
 )
 
 

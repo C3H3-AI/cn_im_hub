@@ -38,17 +38,21 @@ Aggregate common Chinese IM platforms into one Home Assistant integration.
 
 ## 当前支持 / Supported Providers
 
-- Feishu
-- WeCom
-- QQ（WebSocket 网关） / QQ (WebSocket gateway)
-- DingTalk（Stream 模式） / DingTalk (Stream mode)
-- WeChat（个人微信，支持多人绑定） / WeChat personal accounts with multi-binding
+- Feishu（扫码创建应用或手动凭据） / Feishu (scan-to-register or manual credentials)
+- WeCom（扫码创建智能机器人或手动凭据） / WeCom (scan-to-create bot or manual credentials)
+- QQ（扫码绑定或手动凭据，WebSocket 网关） / QQ (scan-to-bind or manual credentials, WebSocket gateway)
+- DingTalk（扫码创建应用或手动凭据，Stream 模式） / DingTalk (scan-to-register or manual credentials, Stream mode)
+- WeChat（个人微信，扫码绑定，支持多人绑定） / WeChat personal accounts with multi-binding
 - XiaoYi（小艺 A2A WebSocket） / XiaoYi A2A WebSocket
+- **Tencent Agent Mail（腾讯 Agent 邮箱，微信扫码授权，支持收发/搜索邮件与未读传感器）** / **Tencent Agent Mail (WeChat scan OAuth, send/read/search mail + unread sensor)**
+- Custom（自定义通道） / Custom channel
 
 ## Ultra 增强功能 / Ultra Features
 
-- **按通道配置对话代理**：每个通道（飞书/微信/企业微信/QQ/钉钉/小艺）可单独选择不同的对话代理，不配置时自动使用全局 `agent_id`  
+- **按通道配置对话代理**：每个通道（飞书/微信/企业微信/QQ/钉钉/小艺/Agent 邮箱）可单独选择不同的对话代理，不配置时自动使用全局 `agent_id`  
   **Per-channel agent override**: each provider channel can independently select a different conversation agent; falls back to the global `agent_id` when not configured.
+- **扫码配置**：飞书/QQ/钉钉/企业微信支持官方扫码创建或绑定机器人，Agent 邮箱支持微信扫码 OAuth 授权；每个扫码 flow 均保留手动填写凭据的入口  
+  **Scan-to-configure**: Feishu/QQ/DingTalk/WeCom support official QR scan to create or bind a bot; Agent Mail uses WeChat scan OAuth. Every scan flow keeps a manual-credential entry.
 - **全量卡片回复**：AI 回复全部以飞书卡片形式展示，不再混杂纯文本  
   **Full card replies**: all AI responses are displayed as Feishu interactive cards.
 - **智能卡片路由**：Claw AI 发出的卡片按钮回执自动路由回 AI 处理，非 AI 来源的按钮回调触发标准 HA 事件，互不干扰  
@@ -171,3 +175,11 @@ Claw AI 发卡片 → 按钮 value 带 from_ai 标记
 
 - 平台后台配置与截图：[`CONFIG.zh-CN.md`](CONFIG.zh-CN.md)
 - Upstream tracking: [`upstream.txt`](upstream.txt)
+
+## Tencent Agent Mail（腾讯 Agent 邮箱）
+
+- 通过微信扫码 OAuth 授权接入（`agent.qq.com` 设备码流），无需应用凭据
+- 未读邮件传感器：`sensor.<title>_unread_mail`（轮询收件箱，含最新邮件属性）
+- 专用服务：`list_messages` / `read_message` / `search_messages` / `reply_message` / `forward_message` / `delete_message`（均支持 response 返回）
+- 发信走 `send_message`（channel=`agent_mail`，target=收件人邮箱），两步确认自动完成
+- 凭据（access/refresh token）自动落盘，refresh_token 轮换后重启不失效

@@ -94,6 +94,30 @@
           "description": "按钮的简化格式（仅飞书），无需写 JSON。"
         }
       }
+    },
+    "list_messages": {
+      "name": "列出邮件",
+      "description": "列出 agent_mail 邮箱中的邮件（支持文件夹、分页），返回 messages 数组。"
+    },
+    "read_message": {
+      "name": "读取邮件",
+      "description": "读取一封邮件的完整内容（正文、收件人、附件）。"
+    },
+    "search_messages": {
+      "name": "搜索邮件",
+      "description": "按关键词搜索邮件，返回 messages 数组。"
+    },
+    "reply_message": {
+      "name": "回复邮件",
+      "description": "回复一封邮件（两步确认自动完成）。"
+    },
+    "forward_message": {
+      "name": "转发邮件",
+      "description": "转发一封邮件给其他收件人（两步确认自动完成）。"
+    },
+    "delete_message": {
+      "name": "删除邮件",
+      "description": "删除邮件。默认软删（回收站 30 天），permanent=true 永久删除。"
     }
   },
   "config_subentries": {
@@ -112,15 +136,25 @@
             "feishu_show_live_progress": "显示思考与工具进度",
             "channel_agent_id": "对话代理（可选）"
           }
+        },
+        "auth_wait": {
+          "title": "飞书扫码创建应用",
+          "description": "{qr_markdown}\n\n用手机**飞书扫一扫**上面的二维码，在页面中创建/绑定机器人应用，完成后点击**提交**。\n\n打不开二维码？[点此打开授权页面]({auth_url})　授权码：`{user_code}`"
+        },
+        "reconfigure": {
+          "title": "通道设置",
+          "description": "保留现有凭据，点击提交重载通道。"
         }
       },
       "abort": {
         "already_configured": "飞书通道已配置。",
         "reconfigure_successful": "飞书通道更新成功。",
-        "max_instances_reached": "已达到最大实例数限制（3个）。"
+        "max_instances_reached": "已达到最大实例数限制（3个）。",
+        "cannot_connect": "无法发起扫码授权（网络错误）。"
       },
       "error": {
-        "cannot_connect": "飞书配置验证失败。"
+        "cannot_connect": "飞书配置验证失败。",
+        "auth_not_confirmed": "未检测到授权。请扫码并在页面确认后再点提交。"
       },
       "entry_type": "飞书通道"
     },
@@ -139,15 +173,25 @@
             "wecom_show_live_progress": "显示思考与工具进度",
             "channel_agent_id": "对话代理（可选）"
           }
+        },
+        "auth_wait": {
+          "title": "企业微信扫码创建智能机器人",
+          "description": "{qr_markdown}\n\n用手机**企业微信扫一扫**上面的二维码创建智能机器人，完成后点击**提交**。\n\n打不开二维码？[点此打开授权页面]({auth_url})"
+        },
+        "reconfigure": {
+          "title": "通道设置",
+          "description": "保留现有凭据，点击提交重载通道。"
         }
       },
       "abort": {
         "already_configured": "企微通道已配置。",
         "reconfigure_successful": "企微通道更新成功。",
-        "max_instances_reached": "已达到最大实例数限制（3个）。"
+        "max_instances_reached": "已达到最大实例数限制（3个）。",
+        "cannot_connect": "无法发起扫码授权（网络错误）。"
       },
       "error": {
-        "cannot_connect": "企微配置验证失败。"
+        "cannot_connect": "企微配置验证失败。",
+        "auth_not_confirmed": "未检测到授权。请扫码并在页面确认后再点提交。"
       },
       "entry_type": "企业微信通道"
     },
@@ -166,15 +210,25 @@
             "qq_show_live_progress": "显示思考与工具进度",
             "channel_agent_id": "对话代理（可选）"
           }
+        },
+        "auth_wait": {
+          "title": "手机 QQ 扫码绑定",
+          "description": "{qr_markdown}\n\n用手机 **QQ 扫一扫**完成机器人绑定，然后点击**提交**。\n\n打不开二维码？[点此打开绑定页面]({auth_url})"
+        },
+        "reconfigure": {
+          "title": "通道设置",
+          "description": "保留现有凭据，点击提交重载通道。"
         }
       },
       "abort": {
         "already_configured": "QQ 通道已配置。",
         "reconfigure_successful": "QQ 通道更新成功。",
-        "max_instances_reached": "已达到最大实例数限制（3个）。"
+        "max_instances_reached": "已达到最大实例数限制（3个）。",
+        "cannot_connect": "无法发起扫码授权（网络错误）。"
       },
       "error": {
-        "cannot_connect": "QQ 配置验证失败。"
+        "cannot_connect": "QQ 配置验证失败。",
+        "auth_not_confirmed": "未检测到授权。请扫码并在页面确认后再点提交。"
       },
       "entry_type": "QQ通道"
     },
@@ -193,15 +247,25 @@
             "dingtalk_show_live_progress": "显示思考与工具进度",
             "channel_agent_id": "对话代理（可选）"
           }
+        },
+        "auth_wait": {
+          "title": "钉钉扫码创建应用",
+          "description": "{qr_markdown}\n\n用手机**钉钉扫一扫**上面的二维码创建机器人，完成后点击**提交**。\n\n打不开二维码？[点此打开授权页面]({auth_url})　授权码：`{user_code}`"
+        },
+        "reconfigure": {
+          "title": "通道设置",
+          "description": "保留现有凭据，点击提交重载通道。"
         }
       },
       "abort": {
         "already_configured": "钉钉通道已配置。",
         "reconfigure_successful": "钉钉通道更新成功。",
-        "max_instances_reached": "已达到最大实例数限制（3个）。"
+        "max_instances_reached": "已达到最大实例数限制（3个）。",
+        "cannot_connect": "无法发起扫码授权（网络错误）。"
       },
       "error": {
-        "cannot_connect": "钉钉配置验证失败。"
+        "cannot_connect": "钉钉配置验证失败。",
+        "auth_not_confirmed": "未检测到授权。请扫码并在页面确认后再点提交。"
       },
       "entry_type": "钉钉通道"
     },
@@ -286,6 +350,44 @@
         "cannot_connect": "配置验证失败。"
       },
       "entry_type": "自定义通道"
+    },
+    "agent_mail": {
+      "initiate_flow": {
+        "user": "添加腾讯 Agent 邮箱",
+        "reconfigure": "腾讯 Agent 邮箱设置"
+      },
+      "step": {
+        "set_options": {
+          "title": "添加腾讯 Agent 邮箱",
+          "description": "在电脑终端运行 `agently-cli auth login` 并微信扫码授权后，将 token 填入此处。\n\nAccess Token 必填；Refresh Token 与 Alias ID 可留空（会自动解析）。",
+          "data": {
+            "access_token": "Access Token",
+            "refresh_token": "Refresh Token（可选）",
+            "alias_id": "Alias ID（可选，留空自动解析）",
+            "channel_agent_id": "对话代理（可选）"
+          }
+        },
+        "auth_wait": {
+          "title": "微信扫码授权",
+          "description": "{qr_markdown}\n\n用手机**微信扫一扫**上面的二维码完成授权，然后点击**提交**。\n\n打不开二维码？[点此打开授权页面]({auth_url})　授权码：`{input_code}`"
+        },
+        "reconfigure": {
+          "title": "Agent 邮箱设置",
+          "description": "可选：为通道指定对话代理（不填则使用全局代理）。"
+        }
+      },
+      "abort": {
+        "already_configured": "腾讯 Agent 邮箱通道已配置。",
+        "reconfigure_successful": "腾讯 Agent 邮箱通道更新成功。",
+        "max_instances_reached": "已达到最大实例数限制（3个）。",
+        "cannot_connect": "无法发起扫码授权（网络错误）。"
+      },
+      "error": {
+        "cannot_connect": "Agent 邮箱配置验证失败（token 无效或网络不可达）。",
+        "auth_not_confirmed": "未检测到授权。请用微信扫码并在页面确认后再点提交。"
+      },
+      "entry_type": "腾讯 Agent 邮箱通道",
+      "channel_title": "腾讯 Agent 邮箱"
     }
   }
 }

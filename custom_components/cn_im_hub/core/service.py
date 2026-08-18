@@ -5,27 +5,39 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.helpers import config_validation as cv
 import voluptuous as vol
 
 from ..const import (
     ATTR_APPROVAL_ID,
+    ATTR_BCC,
     ATTR_CAMERA_ENTITY,
     ATTR_CARD_BUTTONS,
     ATTR_CARD_CONTENT,
     ATTR_CARD_JSON,
     ATTR_CARD_TITLE,
+    ATTR_CC,
     ATTR_CHANNEL,
+    ATTR_CURSOR,
     ATTR_FILE_NAME,
     ATTR_FILE_PATH,
     ATTR_FILE_URL,
+    ATTR_FOLDER,
     ATTR_GIF_FPS,
+    ATTR_INCLUDE_ATTACHMENTS,
+    ATTR_LIMIT,
     ATTR_LOOKBACK,
     ATTR_MESSAGE,
     ATTR_MESSAGE_FORMAT,
+    ATTR_MESSAGE_ID,
     ATTR_MEDIA_TYPE,
+    ATTR_PERMANENT,
+    ATTR_QUERY,
     ATTR_RECORD_DURATION,
+    ATTR_REPLY_ALL,
+    ATTR_SEARCH_IN,
+    ATTR_SUBJECT,
     ATTR_TARGET,
     ATTR_TTS_TEXT,
     ATTR_WECHAT_ACCOUNT_ID,
@@ -34,8 +46,17 @@ from ..const import (
     DEFAULT_GIF_DURATION,
     DEFAULT_VIDEO_RECORD_DURATION,
     DOMAIN,
+    MAIL_FOLDERS,
+    MAIL_SEARCH_IN,
+    PROVIDER_AGENT_MAIL,
     PROVIDER_WECHAT,
+    SERVICE_DELETE_MESSAGE,
+    SERVICE_FORWARD_MESSAGE,
+    SERVICE_LIST_MESSAGES,
+    SERVICE_READ_MESSAGE,
+    SERVICE_SEARCH_MESSAGES,
     SERVICE_SEND_MESSAGE,
+    SERVICE_REPLY_MESSAGE,
 )
 from ..media.camera import (
     async_capture_camera_gif,
@@ -298,15 +319,120 @@ async def _dispatch_tts(provider, requested, p, target, ttype):
         await provider.send_text(target, p["message"], ttype)
 
 
+# ── agent_mail 专用服务 ────────────────────────────────────────────────
+_MAIL_SCHEMAS: dict[str, vol.Schema] = {
+    SERVICE_LIST_MESSAGES: vol.Schema(
+        {
+            vol.Optional(ATTR_LIMIT, default=10): vol.Coerce(int),
+            vol.Optional(ATTR_FOLDER, default="inbox"): vol.In(MAIL_FOLDERS),
+            vol.Optional(ATTR_CURSOR, default=""): str,
+        }
+    ),
+    SERVICE_READ_MESSAGE: vol.Schema({vol.Required(ATTR_MESSAGE_ID): str}),
+    SERVICE_SEARCH_MESSAGES: vol.Schema(
+        {
+            vol.Required(ATTR_QUERY): str,
+            vol.Optional(ATTR_SEARCH_IN, default="SEARCH_IN_ALL"): vol.In(MAIL_SEARCH_IN),
+            vol.Optional(ATTR_LIMIT, default=10): vol.Coerce(int),
+            vol.Optional(ATTR_CURSOR, default=""): str,
+        }
+    ),
+    SERVICE_REPLY_MESSAGE: vol.Schema(
+        {
+            vol.Required(ATTR_MESSAGE_ID): str,
+            vol.Required(ATTR_MESSAGE): str,
+            vol.Optional(ATTR_REPLY_ALL, default=False): bool,
+        }
+    ),
+    SERVICE_FORWARD_MESSAGE: vol.Schema(
+        {
+            vol.Required(ATTR_MESSAGE_ID): str,
+            vol.Required("to"): str,
+            vol.Optional(ATTR_INCLUDE_ATTACHMENTS, default=False): bool,
+        }
+    ),
+    SERVICE_DELETE_MESSAGE: vol.Schema(
+        {
+            vol.Required(ATTR_MESSAGE_ID): str,
+            vol.Optional(ATTR_PERMANENT, default=False): bool,
+        }
+    ),
+}
+
+
+async def _handle_mail_service(hass: HomeAssistant, call: ServiceCall) -> dict[str, Any]:
+    providers = all_provider_runtimes(hass, PROVIDER_AGENT_MAIL)
+    if not providers:
+        raise ValueError("No agent_mail provider configured")
+    provider = (
+        providers[0]
+        if len(providers) == 1
+        else select_provider_runtime(providers, explicit_target=str(call.data.get(ATTR_TARGET, "")))
+    )
+    if provider is None:
+        raise ValueError("agent_mail provider is ambiguous; provide a target")
+    client = provider.client
+    d = call.data
+    svc = call.service
+
+    if svc == SERVICE_LIST_MESSAGES:
+        return await client.async_list_messages(
+            limit=int(d.get(ATTR_LIMIT, 10) or 10),
+            folder=str(d.get(ATTR_FOLDER, "inbox")),
+            cursor=str(d.get(ATTR_CURSOR, "")),
+        )
+    if svc == SERVICE_READ_MESSAGE:
+        return {"message": await client.async_read_message(str(d[ATTR_MESSAGE_ID]))}
+    if svc == SERVICE_SEARCH_MESSAGES:
+        return await client.async_search_messages(
+            str(d[ATTR_QUERY]),
+            str(d.get(ATTR_SEARCH_IN, "SEARCH_IN_ALL")),
+            int(d.get(ATTR_LIMIT, 10) or 10),
+            str(d.get(ATTR_CURSOR, "")),
+        )
+    if svc == SERVICE_REPLY_MESSAGE:
+        await client.async_reply_message(
+            str(d[ATTR_MESSAGE_ID]),
+            str(d.get(ATTR_MESSAGE, "")),
+            reply_all=bool(d.get(ATTR_REPLY_ALL, False)),
+        )
+        return {"queued": True}
+    if svc == SERVICE_FORWARD_MESSAGE:
+        to = [e.strip() for e in str(d.get("to", "")).split(",") if e.strip()]
+        if not to:
+            raise ValueError("forward_message: at least one recipient (to) is required")
+        await client.async_forward_message(
+            str(d[ATTR_MESSAGE_ID]), to, bool(d.get(ATTR_INCLUDE_ATTACHMENTS, False))
+        )
+        return {"queued": True}
+    if svc == SERVICE_DELETE_MESSAGE:
+        mid = str(d[ATTR_MESSAGE_ID])
+        if bool(d.get(ATTR_PERMANENT, False)):
+            await client.async_delete_message(mid)
+        else:
+            await client.async_trash_message(mid)
+        return {"deleted": mid}
+    raise ValueError(f"Unknown mail service: {svc}")
+
+
 def register_services(hass: HomeAssistant) -> None:
     async def _service_handler(call: ServiceCall) -> None:
         await _handle_send_message(hass, call)
 
-    if hass.services.has_service(DOMAIN, SERVICE_SEND_MESSAGE):
-        return
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_SEND_MESSAGE,
-        _service_handler,
-        schema=SERVICE_SCHEMA,
-    )
+    if not hass.services.has_service(DOMAIN, SERVICE_SEND_MESSAGE):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_SEND_MESSAGE,
+            _service_handler,
+            schema=SERVICE_SCHEMA,
+        )
+
+    for name, schema in _MAIL_SCHEMAS.items():
+        if not hass.services.has_service(DOMAIN, name):
+            hass.services.async_register(
+                DOMAIN,
+                name,
+                _handle_mail_service,
+                schema=schema,
+                supports_response=SupportsResponse.OPTIONAL,
+            )

@@ -10,7 +10,17 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 
-from .const import CONF_AGENT_ID, DOMAIN, SERVICE_SEND_MESSAGE
+from .const import (
+    CONF_AGENT_ID,
+    DOMAIN,
+    SERVICE_DELETE_MESSAGE,
+    SERVICE_FORWARD_MESSAGE,
+    SERVICE_LIST_MESSAGES,
+    SERVICE_READ_MESSAGE,
+    SERVICE_SEARCH_MESSAGES,
+    SERVICE_SEND_MESSAGE,
+    SERVICE_REPLY_MESSAGE,
+)
 from .core.service import register_services
 from .models import HubRuntime
 from .providers.registry import get_provider_specs
@@ -116,8 +126,17 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if e.entry_id != entry.entry_id
     )
     if not has_remaining:
-        if hass.services.has_service(DOMAIN, SERVICE_SEND_MESSAGE):
-            hass.services.async_remove(DOMAIN, SERVICE_SEND_MESSAGE)
+        for _svc in (
+            SERVICE_SEND_MESSAGE,
+            SERVICE_LIST_MESSAGES,
+            SERVICE_READ_MESSAGE,
+            SERVICE_SEARCH_MESSAGES,
+            SERVICE_REPLY_MESSAGE,
+            SERVICE_FORWARD_MESSAGE,
+            SERVICE_DELETE_MESSAGE,
+        ):
+            if hass.services.has_service(DOMAIN, _svc):
+                hass.services.async_remove(DOMAIN, _svc)
         from .core.tmp_cleanup import async_unload_tmp_cleanup
         await async_unload_tmp_cleanup(hass)
 

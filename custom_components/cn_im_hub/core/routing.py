@@ -17,6 +17,7 @@ CHANNEL_MAP: dict[str, tuple[str, str]] = {
     "dingtalk/user": ("dingtalk", "user"),
     "dingtalk/group": ("dingtalk", "group"),
     "wechat/user_id": ("wechat", "user_id"),
+    "agent_mail": ("agent_mail", ""),
 }
 
 

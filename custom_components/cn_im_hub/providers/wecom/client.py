@@ -33,6 +33,7 @@ from ...media.rich_media import (
 )
 from ...models import ProviderRuntime
 from ..base import ProviderSpec
+from .flow import WecomScanSubentryFlow
 from .prompt import build_wecom_prompt
 
 _LOGGER = logging.getLogger(__name__)
@@ -603,4 +604,5 @@ PROVIDER_SPEC = ProviderSpec(
     validate_config=async_validate_config,
     setup_provider=async_setup_provider,
     allow_multiple=True,
+    flow_handler=WecomScanSubentryFlow,
 )

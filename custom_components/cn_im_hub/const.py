@@ -13,7 +13,21 @@ PROVIDER_DINGTALK: Final = "dingtalk"
 PROVIDER_WECHAT: Final = "wechat"
 PROVIDER_XIAOYI: Final = "xiaoyi"
 PROVIDER_CUSTOM: Final = "custom"
-PROVIDERS: Final = (PROVIDER_WECOM, PROVIDER_WECHAT, PROVIDER_QQ, PROVIDER_FEISHU, PROVIDER_DINGTALK, PROVIDER_XIAOYI, PROVIDER_CUSTOM)
+PROVIDER_AGENT_MAIL: Final = "agent_mail"
+PROVIDERS: Final = (
+    PROVIDER_WECOM,
+    PROVIDER_WECHAT,
+    PROVIDER_QQ,
+    PROVIDER_FEISHU,
+    PROVIDER_DINGTALK,
+    PROVIDER_XIAOYI,
+    PROVIDER_CUSTOM,
+    PROVIDER_AGENT_MAIL,
+)
+
+CONF_AGENT_MAIL_ACCESS_TOKEN: Final = "access_token"
+CONF_AGENT_MAIL_REFRESH_TOKEN: Final = "refresh_token"
+CONF_AGENT_MAIL_ALIAS_ID: Final = "alias_id"
 
 CONF_ENABLED_PROVIDERS: Final = "enabled_providers"
 CONF_PROVIDERS: Final = "providers"
@@ -60,6 +74,32 @@ XIAOYI_DEFAULT_WS_URL_2: Final = "wss://116.63.174.231/openclaw/v1/ws/link"
 
 SERVICE_SEND_MESSAGE: Final = "send_message"
 
+# agent_mail 专用服务
+SERVICE_LIST_MESSAGES: Final = "list_messages"
+SERVICE_READ_MESSAGE: Final = "read_message"
+SERVICE_SEARCH_MESSAGES: Final = "search_messages"
+SERVICE_REPLY_MESSAGE: Final = "reply_message"
+SERVICE_FORWARD_MESSAGE: Final = "forward_message"
+SERVICE_DELETE_MESSAGE: Final = "delete_message"
+
+# agent_mail 服务字段
+ATTR_MESSAGE_ID: Final = "message_id"
+ATTR_QUERY: Final = "query"
+ATTR_SEARCH_IN: Final = "search_in"
+ATTR_FOLDER: Final = "folder"
+ATTR_LIMIT: Final = "limit"
+ATTR_CURSOR: Final = "cursor"
+ATTR_CC: Final = "cc"
+ATTR_BCC: Final = "bcc"
+ATTR_SUBJECT: Final = "subject"
+ATTR_BODY_FORMAT: Final = "body_format"
+ATTR_REPLY_ALL: Final = "reply_all"
+ATTR_INCLUDE_ATTACHMENTS: Final = "include_attachments"
+ATTR_PERMANENT: Final = "permanent"
+
+MAIL_FOLDERS: Final = ("inbox", "sent", "trash", "spam")
+MAIL_SEARCH_IN: Final = ("SEARCH_IN_ALL", "SEARCH_IN_SUBJECT", "SEARCH_IN_CONTENT")
+
 ATTR_PROVIDER: Final = "provider"
 ATTR_TARGET: Final = "target"
 ATTR_MESSAGE: Final = "message"
@@ -96,6 +136,7 @@ CHANNEL_QQ_CHANNEL: Final = "qq/channel"
 CHANNEL_DINGTALK_USER: Final = "dingtalk/user"
 CHANNEL_DINGTALK_GROUP: Final = "dingtalk/group"
 CHANNEL_WECHAT_USER_ID: Final = "wechat/user_id"
+CHANNEL_AGENT_MAIL: Final = "agent_mail"
 
 CHANNEL_OPTIONS: Final = (
     CHANNEL_FEISHU_CHAT_ID,
@@ -107,4 +148,5 @@ CHANNEL_OPTIONS: Final = (
     CHANNEL_DINGTALK_USER,
     CHANNEL_DINGTALK_GROUP,
     CHANNEL_WECHAT_USER_ID,
+    CHANNEL_AGENT_MAIL,
 )
