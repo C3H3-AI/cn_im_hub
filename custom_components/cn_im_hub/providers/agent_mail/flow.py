@@ -50,7 +50,15 @@ def _make_qr_data_uri(text: str) -> str:
 
 
 class AgentMailProviderSubentryFlow(ConfigSubentryFlow):
-    """WeChat-scan device-flow setup for the Tencent Agent Mail channel."""
+    """Two-step WeChat-scan device-flow setup for the Tencent Agent Mail.
+
+    agent.qq.com has no single-scan endpoint (scan_url is always empty).
+    Real flow (verified against the live page): the authorization page
+    embeds the official WeChat login QR (open.weixin.qq.com/connect/qrconnect).
+    So the user first opens the browser_url (via our QR or the link), then
+    scans the page's WeChat QR to sign in and confirm authorization.
+    We keep both: our QR for the page + the link, then poll poll_url.
+    """
 
     _provider_spec: Any
     _current: dict[str, Any]
@@ -89,7 +97,7 @@ class AgentMailProviderSubentryFlow(ConfigSubentryFlow):
         self._current["poll_url"] = j["poll_url"]
         self._current["browser_url"] = str(j.get("browser_url", ""))
         self._current["input_code"] = str(j.get("input_code", ""))
-        # 本地生成授权页二维码（segno，HA 已依赖）——用户微信扫码即授权，无需跳转浏览器
+        # 授权页二维码：扫码打开 agent.qq.com 授权页（页内嵌微信登录二维码）
         self._current["qr_data"] = await self.hass.async_add_executor_job(
             _make_qr_data_uri, self._current["browser_url"]
         )

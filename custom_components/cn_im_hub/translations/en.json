@@ -369,7 +369,7 @@
         },
         "auth_wait": {
           "title": "Scan with WeChat",
-          "description": "{qr_markdown}\n\nScan the QR code above with **WeChat**, then click **Submit**. \n\nCan't scan? [Open the authorization page]({auth_url})　Code: `{input_code}`"
+          "description": "{qr_markdown}\n\nScan the QR above with **WeChat** (or open the link below in a browser) to open the Agent Mail authorization page.\n\nThe page shows its own **WeChat sign-in QR** — scan that one too, to sign in and authorize.\n\nIf prompted, enter the authorization code: **`{input_code}`**\n\nClick **Submit** once done — binding completes automatically.\n\n[👉 Can't scan? Open the authorization page]({auth_url})"
         },
         "reconfigure": {
           "title": "Agent Mail settings",

@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Any
 
+import aiohttp
 import voluptuous as vol
 
 from homeassistant.core import HomeAssistant
@@ -39,6 +41,12 @@ UA = "agently-cli/1.0.15 (windows/amd64; agent/workbuddy)"
 
 DEFAULT_SUBJECT = "Home Assistant"
 MAX_CONFIRM_RETRY = 2
+
+# 所有 agent.qq.com 请求的显式超时（aiohttp 默认 5 分钟，网络慢时会把集成
+# setup/reload 挂死；15 秒足够 OAuth/消息接口正常响应）
+REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=15)
+# 401 授权过期持久通知的固定 id（HA 按 id 去重，不会重复弹窗）
+_AUTH_NOTIFY_ID = "cn_im_hub_agent_mail_auth_expired"
 
 
 class AgentMailError(Exception):
@@ -92,7 +100,7 @@ class AgentMailClient:
         }
         try:
             async with self._session.post(
-                f"{AUTH_BASE}/oauth/token", data=form, headers={"User-Agent": UA}
+                f"{AUTH_BASE}/oauth/token", data=form, headers={"User-Agent": UA}, timeout=REQUEST_TIMEOUT
             ) as resp:
                 if resp.status >= 400:
                     _LOGGER.warning("agent_mail refresh failed: HTTP %s", resp.status)
@@ -124,7 +132,9 @@ class AgentMailClient:
 
         async def _go(token: str) -> tuple[int, Any]:
             h = {**headers, "Authorization": f"Bearer {token}"}
-            async with self._session.request(method, url, headers=h, json=data) as resp:
+            async with self._session.request(
+                method, url, headers=h, json=data, timeout=REQUEST_TIMEOUT
+            ) as resp:
                 body = await resp.text()
                 try:
                     j = await resp.json()
@@ -137,7 +147,32 @@ class AgentMailClient:
             async with self._lock:
                 if await self._refresh():
                     status, j = await _go(self._access_token)
+        if status == 401:
+            await self._notify_auth_expired()
         return status, j
+
+    async def _notify_auth_expired(self) -> None:
+        """401 授权过期时弹一条持久通知（同 id 去重，1 小时内不重复）。"""
+        now = time.monotonic()
+        if now - getattr(self, "_last_auth_notify", 0.0) < 3600:
+            return
+        self._last_auth_notify = now
+        try:
+            await self._hass.services.async_call(
+                "persistent_notification",
+                "create",
+                {
+                    "title": "Agent 邮箱授权已过期",
+                    "message": (
+                        "腾讯 Agent 邮箱（agent.qq.com）访问令牌已失效（HTTP 401）。"
+                        "请在 Home Assistant 中重新配置 cn_im_hub → 腾讯 Agent 邮箱，"
+                        "重新微信扫码授权。"
+                    ),
+                    "notification_id": _AUTH_NOTIFY_ID,
+                },
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("agent_mail auth notification failed: %s", err)
 
     async def _require_alias(self) -> str:
         if not self._alias_id:
@@ -305,11 +340,11 @@ class AgentMailClient:
         aid = await self._require_alias()
         url = f"{API_BASE}/v1/aliases/{aid}/messages/{message_id}/attachments/{attachment_id}"
         headers = {"Authorization": f"Bearer {self._access_token}", "User-Agent": UA}
-        async with self._session.get(url, headers=headers) as resp:
+        async with self._session.get(url, headers=headers, timeout=REQUEST_TIMEOUT) as resp:
             if resp.status == 401 and self._refresh_token:
                 await self._refresh()
                 headers = {"Authorization": f"Bearer {self._access_token}", "User-Agent": UA}
-                async with self._session.get(url, headers=headers) as resp2:
+                async with self._session.get(url, headers=headers, timeout=REQUEST_TIMEOUT) as resp2:
                     if resp2.status >= 400:
                         raise AgentMailError(f"attachment download failed: HTTP {resp2.status}")
                     return await resp2.read()
