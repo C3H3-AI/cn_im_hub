@@ -290,7 +290,8 @@
       "abort": {
         "already_configured": "微信通道已配置。",
         "reconfigure_successful": "微信通道更新成功。",
-        "max_instances_reached": "已达到最大实例数限制（3个）。"
+        "max_instances_reached": "已达到最大实例数限制（3个）。",
+        "already_connected": "{message}"
       },
       "error": {
         "cannot_connect": "微信配置验证失败。",

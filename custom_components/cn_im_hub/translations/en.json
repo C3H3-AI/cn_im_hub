@@ -290,7 +290,8 @@
       "abort": {
         "already_configured": "WeChat channel is already configured.",
         "reconfigure_successful": "WeChat channel updated successfully.",
-        "max_instances_reached": "Maximum instances reached (3)."
+        "max_instances_reached": "Maximum instances reached (3).",
+        "already_connected": "{message}"
       },
       "error": {
         "cannot_connect": "Failed to validate WeChat config.",
