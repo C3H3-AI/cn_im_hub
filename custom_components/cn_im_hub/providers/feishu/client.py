@@ -154,6 +154,9 @@ def _message_handler_factory(hass, api, tracker, agent_id, show_live_progress: b
         chat_id = message.get("chat_id", "")
         user_id = message.get("user_id", "")
         text = message.get("text", "").strip()
+        # Strip @_user_N placeholders from Feishu group @mentions
+        import re
+        text = re.sub(r"@_user_\d+", "", text).strip()
         msg_type = message.get("msg_type", "")
         raw_content = message.get("raw_content", "")
         parent_id = message.get("parent_id", "")
