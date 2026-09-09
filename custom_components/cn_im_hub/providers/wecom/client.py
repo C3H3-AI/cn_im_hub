@@ -387,7 +387,7 @@ class WeComWsClient:
                         _LOGGER.warning(
                             "WeCom websocket closed by server (code=%s reason=%s)",
                             self._ws.close_code if self._ws else None,
-                            self._ws.close_reason if self._ws else None,
+                            getattr(self._ws, "close_reason", None),
                         )
                         break
             except asyncio.CancelledError:
