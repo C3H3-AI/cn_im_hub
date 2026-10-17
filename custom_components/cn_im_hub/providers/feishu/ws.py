@@ -26,6 +26,75 @@ _EVENT_CHAT_UPDATED = "im.chat.updated_v1"
 _EVENT_CHAT_DISBANDED = "im.chat.disbanded_v1"
 
 
+class _IgnoredEventProcessor:
+    """兜底事件处理器。
+
+    lark-oapi 的事件分发器是白名单模式：``EventDispatcherHandler`` 在
+    ``_processorMap`` 里按 ``{schema}.{event_type}`` 查找处理器，查不到就抛
+    ``EventException("processor not found, type: ...")``。
+
+    飞书后台开启的事件订阅（例如 ``im.chat.access_event.bot_p2p_chat_entered_v1``，
+    用户在飞书里打开与机器人的单聊时就会推送）如果本集成没有显式注册，长连接就会
+    持续刷 ``handle message failed ... processor not found`` 的 ERROR 日志。
+
+    这个处理器不关心事件内容，只负责把未注册的事件正常接收并丢弃，从而彻底避免
+    上述噪声，同时保证长连接不因单个未知事件而受影响。
+    """
+
+    #: lark-oapi 用 ``JSON.unmarshal(plaintext, processor.type())`` 反序列化，
+    #: 其实现是 ``clazz(json.loads(...))``，因此 ``dict`` 可以安全地接收任意结构。
+    _TYPE = dict
+
+    def type(self):
+        """返回反序列化目标类型（lark-oapi 的处理器协议要求）。"""
+        return self._TYPE
+
+    def do(self, data) -> None:
+        """静默丢弃事件。"""
+        return None
+
+
+class _FallbackProcessorMap(dict):
+    """``_processorMap`` 的兜底包装：任何未注册的事件都返回空处理器。
+
+    lark-oapi 内部用 ``self._processorMap.get(event_key)`` 查找处理器，
+    而 ``dict.get()`` **不会**触发 ``__missing__``，因此这里必须同时覆盖
+    ``get``（查找主路径）和 ``__missing__``（下标访问路径），才能保证
+    任何未注册的事件 key 都能拿到兜底处理器。
+    """
+
+    def get(self, key, default=None):  # noqa: D102 - dict 协议覆盖
+        processor = super().get(key)
+        if processor is not None:
+            return processor
+        _LOGGER.debug("Feishu 事件未注册，已静默忽略: %s", key)
+        return _IgnoredEventProcessor()
+
+    def __missing__(self, key):  # noqa: D105 - dict 协议钩子
+        _LOGGER.debug("Feishu 事件未注册，已静默忽略: %s", key)
+        return _IgnoredEventProcessor()
+
+
+def _install_unregistered_event_fallback(event_handler) -> None:
+    """给 lark-oapi 的 dispatcher 安装未注册事件兜底。
+
+    参数是 ``EventDispatcherHandler.build()`` 的返回值。函数原地替换其
+    ``_processorMap``，保持已有的所有已注册处理器不变。
+    """
+    processor_map = getattr(event_handler, "_processorMap", None)
+    if not isinstance(processor_map, dict) or isinstance(
+        processor_map, _FallbackProcessorMap
+    ):
+        # 要么 SDK 内部结构变了（不强行处理，留日志），要么已经装过。
+        if processor_map is None:
+            _LOGGER.warning(
+                "lark-oapi 的 EventDispatcherHandler 结构变化，"
+                "未能安装未注册事件兜底（processor not found 日志可能继续出现）"
+            )
+        return
+    event_handler._processorMap = _FallbackProcessorMap(processor_map)
+
+
 class FeishuWsClient:
     def __init__(
         self,
@@ -132,6 +201,10 @@ class FeishuWsClient:
             .register_p2_customized_event(_EVENT_CHAT_DISBANDED, self._on_chat_event_sync)
         )
         event_handler = builder.build()
+        # 飞书后台可以推送本集成未显式注册的事件（例如打开单聊时推送的
+        # im.chat.access_event.bot_p2p_chat_entered_v1），lark-oapi 会因此抛
+        # "processor not found" 并刷 ERROR 日志。这里装上兜底，静默忽略未知事件。
+        _install_unregistered_event_fallback(event_handler)
 
         self._client = lark.ws.Client(
             self._app_id,
